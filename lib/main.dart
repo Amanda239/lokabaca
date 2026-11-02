@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
-import 'core/constants/app_colors.dart';
-import 'screens/splash_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-void main() {
+import 'core/constants/app_colors.dart';
+import 'screens/user/splash_screen.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://mwcjntpvfxyvfosxjwrk.supabase.co',
+    publishableKey: 'sb_publishable_doU8rB3Cj8DdO02xDzXSCg_2-9yhE_q',
+  );
+
   runApp(const LokaBacaApp());
 }
 
