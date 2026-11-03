@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
-import 'user_bootom_navigation.dart';
+import 'user_bottom_navigation.dart';
 import 'collection_screen.dart';
 import 'searchpage_screen.dart';
 import 'peminjaman_screen.dart';
+import 'profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -252,6 +253,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _openSearch();
               } else if (label == 'Riwayat') {
                 _openBorrowing();
+              } else if (label == 'Profil') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ProfileScreen(),
+                  ),
+                );
               } else {
                 _showMessage('Halaman $label akan dibuat berikutnya.');
               }
@@ -466,8 +474,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         break;
 
       case 4:
-        // Halaman Akun akan disambungkan setelah screen tersedia.
-        return;
+        destination = const ProfileScreen();
+        break;
     }
 
     if (destination == null) return;

@@ -2,11 +2,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
-import 'user_bootom_navigation.dart';
+import 'user_bottom_navigation.dart';
 import 'dashboard_screen.dart';
 import 'searchpage_screen.dart';
 import 'peminjaman_screen.dart';
-// import 'profile_screen.dart';
+import 'profile_screen.dart';
 
 class CollectionScreen extends StatefulWidget {
   const CollectionScreen({super.key});
@@ -98,7 +98,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
         return;
 
       case 4:
-        // destination = const ProfileScreen();
+        destination = const ProfileScreen();
         break;
     }
 

@@ -1,9 +1,20 @@
+
 import 'package:flutter/material.dart';
+
 import '../../core/constants/app_colors.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
+
+  void _goToLogin(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,46 +29,48 @@ class SplashScreen extends StatelessWidget {
                 children: [
                   const Spacer(flex: 3),
 
+                  // LOGO
                   Image.asset(
                     'assets/images/lokabaca.png',
-                    width: 180,
-                    height: 180,
+                    width: 190,
+                    height: 190,
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
-                        Icons.menu_book_rounded,
-                        size: 130,
-                        color: AppColors.navy,
+                      return const SizedBox(
+                        width: 190,
+                        height: 190,
+                        child: Icon(
+                          Icons.menu_book_rounded,
+                          size: 115,
+                          color: AppColors.navy,
+                        ),
                       );
                     },
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 20),
 
+                  // TAGLINE
                   const Text(
                     'Perpustakaan Digital\ndi Genggamanmu',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 14,
+                      color: AppColors.navy,
+                      fontSize: 15,
                       height: 1.5,
-                      color: AppColors.text,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
                     ),
                   ),
 
                   const Spacer(flex: 2),
 
+                  // START BUTTON
                   SizedBox(
                     width: double.infinity,
-                    height: 48,
+                    height: 50,
                     child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const LoginScreen(),
-                          ),
-                        );
-                      },
+                      onPressed: () => _goToLogin(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.navy,
                         foregroundColor: AppColors.white,
@@ -70,14 +83,16 @@ class SplashScreen extends StatelessWidget {
                         'Mulai',
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 20),
 
+                  // LOGIN LINK
                   Wrap(
                     alignment: WrapAlignment.center,
                     children: [
@@ -86,22 +101,16 @@ class SplashScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.text,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
-                          );
-                        },
+                        onTap: () => _goToLogin(context),
                         child: const Text(
                           'Masuk',
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.navy,
                           ),
                         ),
@@ -109,7 +118,7 @@ class SplashScreen extends StatelessWidget {
                     ],
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 26),
                 ],
               ),
             );

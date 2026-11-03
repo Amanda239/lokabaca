@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
-import 'user_bootom_navigation.dart';
+import 'user_bottom_navigation.dart';
 import 'dashboard_screen.dart';
 import 'searchpage_screen.dart';
 import 'collection_screen.dart';
+import 'profile_screen.dart';
 
 class PeminjamanScreen extends StatefulWidget {
   final Map<String, dynamic>? selectedBook;
@@ -595,8 +596,8 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
         break;
 
       case 4:
-        // Halaman Akun disambungkan setelah screen tersedia.
-        return;
+        destination = const ProfileScreen();
+        break;
     }
 
     if (destination == null) return;

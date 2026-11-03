@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
-import 'user_bootom_navigation.dart';
+import 'user_bottom_navigation.dart';
 import 'dashboard_screen.dart';
 import 'collection_screen.dart';
 import 'peminjaman_screen.dart';
+import 'profile_screen.dart';
 
 class SearchPageScreen extends StatefulWidget {
   const SearchPageScreen({super.key});
@@ -188,12 +189,17 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  _buildHeader(),
-                  const SizedBox(height: 15),
+                  // SEARCH FIELD - LANGSUNG DI BAGIAN ATAS
                   _buildSearchField(),
+
                   const SizedBox(height: 14),
+
+                  // CATEGORY FILTER
                   _buildCategories(),
+
                   const SizedBox(height: 23),
+
+                  // RECOMMENDATION HEADER
                   _buildSectionHeader(
                     'Rekomendasi untukmu',
                     '',
@@ -207,11 +213,19 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                       });
                     },
                   ),
+
                   const SizedBox(height: 13),
+
+                  // RECOMMENDED BOOKS
                   _buildRecommendedBooks(),
+
                   const SizedBox(height: 25),
+
+                  // CATEGORY SECTION
                   _buildSectionHeader('Kategori', ''),
+
                   const SizedBox(height: 13),
+
                   _buildCategoryGrid(),
                 ]),
               ),
@@ -219,81 +233,11 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
           ],
         ),
       ),
+
+      // BOTTOM NAVIGATION
       bottomNavigationBar: UserBottomNavigation(
         selectedIndex: selectedNav,
         onTap: _navigateTo,
-      ),
-    );
-  }
-
-  // HEADER
-  Widget _buildHeader() {
-    return Row(
-      children: [
-        Container(
-          width: 39,
-          height: 39,
-          decoration: BoxDecoration(
-            color: AppColors.navy,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.menu_book_rounded,
-            color: AppColors.yellow,
-            size: 23,
-          ),
-        ),
-        const SizedBox(width: 10),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Jelajahi Buku',
-                style: TextStyle(
-                  color: AppColors.navy,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              SizedBox(height: 2),
-              Text(
-                'Temukan cerita berikutnya',
-                style: TextStyle(
-                  color: AppColors.grey,
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
-        ),
-        _roundIconButton(
-          Icons.tune_rounded,
-          onTap: _showSortOptions,
-        ),
-      ],
-    );
-  }
-
-  Widget _roundIconButton(
-    IconData icon, {
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(
-            icon,
-            color: AppColors.navy,
-            size: 21,
-          ),
-        ),
       ),
     );
   }
@@ -536,6 +480,7 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                         name == 'Fiksi' || name == 'Non Fiksi'
                             ? name
                             : 'Semua';
+
                     searchQuery = '';
                     searchController.clear();
                   });
@@ -951,7 +896,6 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
         break;
 
       case 1:
-        // Sudah berada di halaman Cari.
         return;
 
       case 2:
@@ -963,8 +907,8 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
         break;
 
       case 4:
-        // Halaman Akun disambungkan setelah screen tersedia.
-        return;
+        destination = const ProfileScreen();
+        break;
     }
 
     if (destination == null) return;

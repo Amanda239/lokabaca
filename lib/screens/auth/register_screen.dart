@@ -1,9 +1,9 @@
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../widgets/auth_text_field.dart';
+import '../../widgets/password_requirements.dart';
 import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -27,13 +27,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+
+    // Memperbarui checklist ketika password berubah.
+    _passwordController.addListener(_refreshPasswordRequirements);
+    _confirmPasswordController.addListener(_refreshPasswordRequirements);
+  }
+
+  void _refreshPasswordRequirements() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+
     super.dispose();
+  }
+
+  // Validasi password.
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Password wajib diisi';
+    }
+
+    if (value.length < 8) {
+      return 'Password minimal 8 karakter';
+    }
+
+    if (!RegExp(r'(?=.*[A-Z])(?=.*[a-z])').hasMatch(value)) {
+      return 'Harus mengandung huruf besar dan kecil';
+    }
+
+    if (!RegExp(r'[0-9]').hasMatch(value)) {
+      return 'Harus mengandung minimal 1 angka';
+    }
+
+    return null;
   }
 
   Future<void> _register() async {
@@ -65,28 +102,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
 
-      // Jika verifikasi email aktif, session belum tersedia.
       if (response.session == null) {
         _showMessage(
           'Akun berhasil dibuat. Silakan cek email untuk verifikasi.',
         );
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const LoginScreen(),
-          ),
-        );
       } else {
         _showMessage('Registrasi berhasil! Silakan masuk.');
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const LoginScreen(),
-          ),
-        );
       }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(),
+        ),
+      );
     } on AuthException catch (error) {
       if (!mounted) return;
 
@@ -164,6 +193,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ),
+
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 2, 24, 28),
@@ -172,6 +202,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Logo
                 Center(
                   child: Column(
                     children: [
@@ -202,6 +233,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 24),
 
+                // Heading
                 const Text(
                   'Buat Akun',
                   style: TextStyle(
@@ -210,7 +242,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     color: AppColors.navy,
                   ),
                 ),
+
                 const SizedBox(height: 5),
+
                 const Text(
                   'Yuk, bergabung dan mulai jelajahi ribuan buku!',
                   style: TextStyle(
@@ -221,6 +255,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 21),
 
+                // Nama lengkap
                 AuthTextField(
                   label: 'Nama Lengkap',
                   hint: 'Masukkan nama lengkap',
@@ -236,6 +271,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
+                // Email
                 AuthTextField(
                   label: 'Email',
                   hint: 'Masukkan email',
@@ -255,6 +291,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
+                // Nomor telepon
                 AuthTextField(
                   label: 'Nomor Telepon',
                   hint: 'Masukkan nomor telepon',
@@ -277,9 +314,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
+                // Password
                 AuthTextField(
                   label: 'Password',
-                  hint: 'Minimal 8 karakter',
+                  hint: 'Masukkan password',
                   icon: Icons.lock_outline_rounded,
                   controller: _passwordController,
                   obscureText: _hidePassword,
@@ -297,16 +335,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       color: AppColors.navy,
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.length < 8) {
-                      return 'Password minimal 8 karakter';
-                    }
-                    return null;
-                  },
+                  validator: _validatePassword,
+                ),
+
+                const SizedBox(height: 12),
+
+                // Checklist password
+                PasswordRequirements(
+                  password: _passwordController.text,
+                  confirmPassword: _confirmPasswordController.text,
+                  showConfirmation: true,
                 ),
 
                 const SizedBox(height: 13),
 
+                // Konfirmasi password
                 AuthTextField(
                   label: 'Konfirmasi Password',
                   hint: 'Masukkan ulang password',
@@ -316,8 +359,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   suffixIcon: IconButton(
                     onPressed: () {
                       setState(() {
-                        _hideConfirmPassword =
-                            !_hideConfirmPassword;
+                        _hideConfirmPassword = !_hideConfirmPassword;
                       });
                     },
                     icon: Icon(
@@ -329,15 +371,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Konfirmasi password wajib diisi';
+                    }
+
                     if (value != _passwordController.text) {
                       return 'Konfirmasi password tidak cocok';
                     }
+
                     return null;
                   },
                 ),
 
                 const SizedBox(height: 22),
 
+                // Tombol daftar
                 SizedBox(
                   width: double.infinity,
                   height: 47,
@@ -374,6 +422,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 19),
 
+                // Divider
                 Row(
                   children: [
                     const Expanded(
@@ -399,6 +448,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
+                // Social buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -418,6 +468,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 18),
 
+                // Login navigation
                 Center(
                   child: Wrap(
                     alignment: WrapAlignment.center,
