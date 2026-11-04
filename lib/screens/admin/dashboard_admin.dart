@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'kelola_buku.dart';
+import 'kelola_anggota.dart';
+import 'peminjaman_admin.dart';
 
 class DashboardAdmin extends StatefulWidget {
   const DashboardAdmin({super.key});
@@ -16,6 +18,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
   static const Color cream = Color(0xFFF8F4EA);
   static const Color textColor = Color(0xFF304258);
   static const Color mutedText = Color(0xFF8792A1);
+  static const Color borderColor = Color(0xFFE8E4DB);
 
   final SupabaseClient supabase = Supabase.instance.client;
 
@@ -32,26 +35,11 @@ class _DashboardAdminState extends State<DashboardAdmin> {
   List<Map<String, dynamic>> recentLoans = [];
 
   final List<Map<String, dynamic>> menuItems = [
-    {
-      'icon': Icons.home_rounded,
-      'label': 'Beranda',
-    },
-    {
-      'icon': Icons.menu_book_rounded,
-      'label': 'Buku',
-    },
-    {
-      'icon': Icons.group_rounded,
-      'label': 'Anggota',
-    },
-    {
-      'icon': Icons.assignment_rounded,
-      'label': 'Peminjaman',
-    },
-    {
-      'icon': Icons.account_circle_rounded,
-      'label': 'Akun',
-    },
+    {'icon': Icons.home_outlined, 'label': 'Beranda'},
+    {'icon': Icons.menu_book_outlined, 'label': 'Buku'},
+    {'icon': Icons.people_outline_rounded, 'label': 'Anggota'},
+    {'icon': Icons.assignment_outlined, 'label': 'Peminjaman'},
+    {'icon': Icons.person_outline_rounded, 'label': 'Akun'},
   ];
 
   @override
@@ -78,11 +66,11 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       final membersCount = await supabase
           .from('profiles')
           .count(CountOption.exact)
-          .eq('role', 'user');
+          .eq('role', 'anggota');
 
       // DATA PEMINJAMAN
-      final loansResponse = await supabase
-          .from('loans')
+      final response = await supabase
+          .from('borrowings')
           .select('''
             id,
             user_id,
@@ -101,34 +89,30 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           ''')
           .order('created_at', ascending: false);
 
-      final List<Map<String, dynamic>> loans =
-          List<Map<String, dynamic>>.from(loansResponse);
+      final List<Map<String, dynamic>> borrowings =
+          List<Map<String, dynamic>>.from(response);
 
-      // STATUS PEMINJAMAN
       final now = DateTime.now();
 
-      final active = loans.where((loan) {
-        final status = loan['status']
-            .toString()
-            .toLowerCase();
+      // PEMINJAMAN AKTIF
+      final active = borrowings.where((borrowing) {
+        final status =
+            borrowing['status']?.toString().toLowerCase() ?? '';
 
         return status == 'dipinjam' ||
             status == 'borrowed' ||
             status == 'aktif';
       }).toList();
 
-      final overdue = active.where((loan) {
-        final dueDate = loan['due_date'];
+      // PEMINJAMAN TERLAMBAT
+      final overdue = active.where((borrowing) {
+        final dueDate = DateTime.tryParse(
+          borrowing['due_date']?.toString() ?? '',
+        );
 
         if (dueDate == null) return false;
 
-        final parsedDate = DateTime.tryParse(
-          dueDate.toString(),
-        );
-
-        if (parsedDate == null) return false;
-
-        return parsedDate.isBefore(now);
+        return dueDate.isBefore(now);
       }).toList();
 
       if (!mounted) return;
@@ -138,9 +122,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         totalMembers = membersCount;
         activeLoans = active.length;
         overdueLoans = overdue.length;
-
-        recentLoans = loans.take(5).toList();
-
+        recentLoans = borrowings.take(5).toList();
         isLoading = false;
       });
     } catch (e) {
@@ -166,6 +148,23 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // NAVIGASI HALAMAN
+
+  Future<void> navigateToPage(Widget page) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => page),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      selectedIndex = 0;
+    });
+
+    loadDashboardData();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -175,15 +174,14 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         child: Column(
           children: [
             _buildHeader(),
-
             Expanded(
               child: Container(
                 width: double.infinity,
                 decoration: const BoxDecoration(
                   color: navy,
                   borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(45),
-                    topRight: Radius.circular(45),
+                    topLeft: Radius.circular(38),
+                    topRight: Radius.circular(38),
                   ),
                 ),
                 child: isLoading
@@ -200,9 +198,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =====================================================
   // HEADER
-  // =====================================================
 
   Widget _buildHeader() {
     return Container(
@@ -212,24 +208,22 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         children: [
           Image.asset(
             'assets/images/lokabaca.png',
-            width: 82,
-            height: 82,
+            width: 78,
+            height: 78,
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) {
               return const SizedBox(
-                width: 82,
-                height: 82,
+                width: 78,
+                height: 78,
                 child: Icon(
                   Icons.menu_book_rounded,
                   color: navy,
-                  size: 45,
+                  size: 42,
                 ),
               );
             },
           ),
-
           const SizedBox(width: 12),
-
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,36 +237,29 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     letterSpacing: -0.4,
                   ),
                 ),
-
-                SizedBox(height: 3),
-
+                SizedBox(height: 4),
                 Text(
                   'Selamat datang di panel admin\nLokaBaca',
                   style: TextStyle(
                     color: Color(0xFF718096),
                     fontSize: 11,
                     height: 1.4,
-                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
-
           _buildHeaderButton(
             Icons.notifications_none_rounded,
             () => showMessage('Belum ada notifikasi baru'),
           ),
-
-          const SizedBox(width: 12),
-
+          const SizedBox(width: 10),
           _buildHeaderButton(
-            Icons.account_circle_rounded,
+            Icons.account_circle_outlined,
             () {
               setState(() {
                 selectedIndex = 4;
               });
-
               showMessage('Menu Akun');
             },
           ),
@@ -289,8 +276,8 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(30),
       child: SizedBox(
-        width: 30,
-        height: 35,
+        width: 32,
+        height: 36,
         child: Icon(
           icon,
           color: navy,
@@ -300,9 +287,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =====================================================
   // LOADING
-  // =====================================================
 
   Widget _buildLoading() {
     return const Center(
@@ -313,9 +298,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =====================================================
   // ERROR
-  // =====================================================
 
   Widget _buildError() {
     return Center(
@@ -325,35 +308,30 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
-              Icons.cloud_off_rounded,
+              Icons.cloud_off_outlined,
               color: cream,
-              size: 45,
+              size: 48,
             ),
-
-            const SizedBox(height: 14),
-
+            const SizedBox(height: 16),
             const Text(
               'Data gagal dimuat',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
               ),
             ),
-
-            const SizedBox(height: 8),
-
+            const SizedBox(height: 10),
             Text(
               errorMessage ?? 'Terjadi kesalahan',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Color(0xFFD7DFE8),
                 fontSize: 11,
+                height: 1.5,
               ),
             ),
-
-            const SizedBox(height: 20),
-
+            const SizedBox(height: 22),
             ElevatedButton.icon(
               onPressed: loadDashboardData,
               icon: const Icon(Icons.refresh_rounded),
@@ -361,6 +339,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: cream,
                 foregroundColor: navy,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],
@@ -369,9 +350,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =====================================================
-  // DASHBOARD CONTENT
-  // =====================================================
+  // CONTENT
 
   Widget _buildContent() {
     return RefreshIndicator(
@@ -380,35 +359,24 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       onRefresh: loadDashboardData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          14,
-          48,
-          14,
-          24,
-        ),
+        padding: const EdgeInsets.fromLTRB(16, 35, 16, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildStatistics(),
-
-            const SizedBox(height: 25),
-
+            const SizedBox(height: 28),
             _buildLoanHeader(),
-
-            const SizedBox(height: 17),
-
+            const SizedBox(height: 16),
             if (recentLoans.isEmpty)
               _buildEmptyLoans()
             else
               ...recentLoans.map(
                 (loan) => Padding(
-                  padding: const EdgeInsets.only(bottom: 13),
+                  padding: const EdgeInsets.only(bottom: 12),
                   child: _buildLoanCard(loan),
                 ),
               ),
-
-            const SizedBox(height: 8),
-
+            const SizedBox(height: 12),
             _buildReportButton(),
           ],
         ),
@@ -416,31 +384,29 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =====================================================
   // STATISTICS
-  // =====================================================
 
   Widget _buildStatistics() {
     final statistics = [
       {
         'title': 'Total Buku',
         'value': totalBooks,
-        'icon': Icons.menu_book_rounded,
+        'icon': Icons.auto_stories_outlined,
       },
       {
         'title': 'Total Anggota',
         'value': totalMembers,
-        'icon': Icons.groups_rounded,
+        'icon': Icons.people_outline_rounded,
       },
       {
         'title': 'Peminjam Aktif',
         'value': activeLoans,
-        'icon': Icons.bookmark_added_rounded,
+        'icon': Icons.bookmark_border_rounded,
       },
       {
         'title': 'Terlambat',
         'value': overdueLoans,
-        'icon': Icons.event_busy_rounded,
+        'icon': Icons.schedule_rounded,
       },
     ];
 
@@ -451,21 +417,25 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       gridDelegate:
           const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 11,
-        mainAxisSpacing: 11,
-        childAspectRatio: 1.48,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.45,
       ),
       itemBuilder: (context, index) {
         final item = statistics[index];
 
         return Container(
           padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 10,
+            horizontal: 12,
+            vertical: 12,
           ),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: borderColor,
+              width: 0.7,
+            ),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -474,33 +444,29 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                 item['title'] as String,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: textColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  color: mutedText,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-
-              const SizedBox(height: 7),
-
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    width: 48,
-                    height: 48,
-                    decoration: const BoxDecoration(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
                       color: cream,
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       item['icon'] as IconData,
                       color: navy,
-                      size: 23,
+                      size: 22,
                     ),
                   ),
-
-                  const SizedBox(width: 8),
-
+                  const SizedBox(width: 10),
                   Flexible(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
@@ -508,7 +474,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                         '${item['value']}',
                         style: const TextStyle(
                           color: navy,
-                          fontSize: 34,
+                          fontSize: 31,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -1,
                         ),
@@ -524,9 +490,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =====================================================
-  // RECENT LOANS HEADER
-  // =====================================================
+  // PEMINJAMAN TERBARU
 
   Widget _buildLoanHeader() {
     return Row(
@@ -540,10 +504,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
             fontWeight: FontWeight.w800,
           ),
         ),
-
         InkWell(
           onTap: () {
-            showMessage('Halaman semua peminjaman');
+            navigateToPage(const PeminjamanAdminScreen());
           },
           borderRadius: BorderRadius.circular(8),
           child: const Row(
@@ -552,17 +515,15 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                 'Lihat Semua',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-
-              SizedBox(width: 4),
-
+              SizedBox(width: 5),
               Icon(
-                Icons.arrow_forward_ios_rounded,
+                Icons.arrow_forward_rounded,
                 color: Colors.white,
-                size: 14,
+                size: 17,
               ),
             ],
           ),
@@ -571,9 +532,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =====================================================
-  // EMPTY LOANS
-  // =====================================================
+  // EMPTY
 
   Widget _buildEmptyLoans() {
     return Container(
@@ -584,18 +543,16 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: const Column(
         children: [
           Icon(
-            Icons.library_books_outlined,
+            Icons.menu_book_outlined,
             color: navy,
-            size: 35,
+            size: 36,
           ),
-
-          SizedBox(height: 10),
-
+          SizedBox(height: 12),
           Text(
             'Belum ada peminjaman',
             style: TextStyle(
@@ -604,9 +561,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               fontWeight: FontWeight.w700,
             ),
           ),
-
-          SizedBox(height: 4),
-
+          SizedBox(height: 5),
           Text(
             'Data peminjaman akan muncul di sini.',
             style: TextStyle(
@@ -619,9 +574,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =====================================================
   // LOAN CARD
-  // =====================================================
 
   Widget _buildLoanCard(Map<String, dynamic> loan) {
     final book = loan['books'] as Map<String, dynamic>?;
@@ -630,13 +583,11 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     final title = book?['title']?.toString() ?? 'Buku';
     final author = book?['author']?.toString() ?? '-';
     final coverUrl = book?['cover_url']?.toString();
-
     final borrower =
         profile?['full_name']?.toString() ?? 'Anggota';
 
-    final status = loan['status']
-        .toString()
-        .toLowerCase();
+    final status =
+        loan['status']?.toString().toLowerCase() ?? '';
 
     final isOverdue = _isOverdue(loan);
 
@@ -648,11 +599,11 @@ class _DashboardAdminState extends State<DashboardAdmin> {
             ? 'DIPINJAM'
             : status.toUpperCase();
 
-    final statusColor = isOverdue
-        ? const Color(0xFFF4D0C8)
-        : const Color(0xFFB9E4CD);
+    final statusBackground = isOverdue
+        ? const Color(0xFFF9E5E0)
+        : const Color(0xFFE5F2EA);
 
-    final statusTextColor = isOverdue
+    final statusForeground = isOverdue
         ? const Color(0xFF9D3D30)
         : const Color(0xFF315F46);
 
@@ -662,21 +613,18 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(13),
       ),
       child: Row(
         children: [
-          _buildBookCover(coverUrl, title),
-
+          _buildBookCover(coverUrl),
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   title,
@@ -689,9 +637,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-
-                const SizedBox(height: 3),
-
+                const SizedBox(height: 4),
                 Text(
                   author,
                   maxLines: 1,
@@ -701,21 +647,17 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     fontSize: 10,
                   ),
                 ),
-
-                const SizedBox(height: 3),
-
+                const SizedBox(height: 4),
                 Text(
                   borrower,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: mutedText,
-                    fontSize: 9,
+                    fontSize: 10,
                   ),
                 ),
-
                 const SizedBox(height: 5),
-
                 Text(
                   createdAt == null
                       ? '-'
@@ -723,28 +665,26 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                   style: const TextStyle(
                     color: textColor,
                     fontSize: 9,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
-
-          const SizedBox(width: 6),
-
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: 8,
               vertical: 5,
             ),
             decoration: BoxDecoration(
-              color: statusColor,
+              color: statusBackground,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               statusText,
               style: TextStyle(
-                color: statusTextColor,
+                color: statusForeground,
                 fontSize: 8,
                 fontWeight: FontWeight.w800,
               ),
@@ -755,14 +695,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =====================================================
   // BOOK COVER
-  // =====================================================
 
-  Widget _buildBookCover(
-    String? coverUrl,
-    String title,
-  ) {
+  Widget _buildBookCover(String? coverUrl) {
     return Container(
       width: 52,
       height: 76,
@@ -786,16 +721,14 @@ class _DashboardAdminState extends State<DashboardAdmin> {
   Widget _buildCoverPlaceholder() {
     return const Center(
       child: Icon(
-        Icons.menu_book_rounded,
+        Icons.auto_stories_outlined,
         color: navy,
-        size: 28,
+        size: 27,
       ),
     );
   }
 
-  // =====================================================
   // DATE
-  // =====================================================
 
   String _formatDate(DateTime date) {
     const months = [
@@ -816,10 +749,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  bool _isOverdue(Map<String, dynamic> loan) {
-    final status = loan['status']
-        .toString()
-        .toLowerCase();
+  bool _isOverdue(Map<String, dynamic> borrowing) {
+    final status =
+        borrowing['status']?.toString().toLowerCase() ?? '';
 
     final isActive = status == 'dipinjam' ||
         status == 'borrowed' ||
@@ -828,7 +760,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     if (!isActive) return false;
 
     final dueDate = DateTime.tryParse(
-      loan['due_date']?.toString() ?? '',
+      borrowing['due_date']?.toString() ?? '',
     );
 
     if (dueDate == null) return false;
@@ -836,47 +768,44 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     return dueDate.isBefore(DateTime.now());
   }
 
-  // =====================================================
   // REPORT BUTTON
-  // =====================================================
 
   Widget _buildReportButton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: SizedBox(
-        width: double.infinity,
-        height: 40,
-        child: ElevatedButton(
-          onPressed: () {
-            showMessage('Halaman laporan akan dibuka');
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: cream,
-            foregroundColor: navy,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
+    return SizedBox(
+      width: double.infinity,
+      height: 42,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          showMessage('Halaman laporan akan dibuka');
+        },
+        icon: const Icon(
+          Icons.insert_chart_outlined_rounded,
+          size: 18,
+        ),
+        label: const Text(
+          'Cek Laporan',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
           ),
-          child: const Text(
-            'Cek Laporan',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
+        ),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: cream,
+          foregroundColor: navy,
+          side: BorderSide.none,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
     );
   }
 
-  // =====================================================
   // BOTTOM NAVIGATION
-  // =====================================================
 
   Widget _buildBottomNavigation() {
     return Container(
-      height: 57,
+      height: 58,
       decoration: const BoxDecoration(
         color: cream,
         border: Border(
@@ -897,27 +826,25 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
               return Expanded(
                 child: InkWell(
-                  onTap: () {
+                  onTap: () async {
                     setState(() {
                       selectedIndex = index;
                     });
 
                     if (index == 1) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              const KelolaBukuScreen(),
-                        ),
-                      ).then((_) {
-                        if (mounted) {
-                          loadDashboardData();
-                        }
-                      });
-                    } else if (index != 0) {
-                      showMessage(
-                        'Menu ${item['label']} dipilih',
+                      await navigateToPage(
+                        const KelolaBukuScreen(),
                       );
+                    } else if (index == 2) {
+                      await navigateToPage(
+                        const KelolaAnggotaPage(),
+                      );
+                    } else if (index == 3) {
+                      await navigateToPage(
+                        const PeminjamanAdminScreen(),
+                      );
+                    } else if (index == 4) {
+                      showMessage('Menu Akun dipilih');
                     }
                   },
                   child: Column(
@@ -930,9 +857,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                             ? navy
                             : const Color(0xFF69624F),
                       ),
-
-                      const SizedBox(height: 2),
-
+                      const SizedBox(height: 3),
                       Text(
                         item['label'] as String,
                         maxLines: 1,

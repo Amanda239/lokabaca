@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'dashboard_admin.dart';
+import 'kelola_anggota.dart';
+
 class KelolaBukuScreen extends StatefulWidget {
   const KelolaBukuScreen({super.key});
 
@@ -202,9 +205,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
           children: [
             _buildHeader(),
             _buildSearch(),
-
             const SizedBox(height: 18),
-
             Expanded(
               child: isLoading
                   ? const Center(
@@ -227,7 +228,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
                             itemCount: filteredBooks.length,
                             itemBuilder: (context, index) {
                               final book = filteredBooks[index];
-
                               return _buildBookCard(book);
                             },
                           ),
@@ -255,7 +255,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
               size: 20,
             ),
           ),
-
           const Expanded(
             child: Text(
               'Kelola Buku',
@@ -267,7 +266,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
               ),
             ),
           ),
-
           InkWell(
             onTap: openAddBook,
             borderRadius: BorderRadius.circular(30),
@@ -360,9 +358,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
               size: 35,
             ),
           ),
-
           const SizedBox(height: 14),
-
           const Text(
             'Buku tidak ditemukan',
             style: TextStyle(
@@ -371,9 +367,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 5),
-
           const Text(
             'Coba gunakan kata kunci lain.',
             style: TextStyle(
@@ -407,9 +401,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
             width: 55,
             height: 82,
           ),
-
           const SizedBox(width: 10),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -425,9 +417,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   book['author'] ?? '-',
                   maxLines: 1,
@@ -437,9 +427,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
                     fontSize: 10,
                   ),
                 ),
-
                 const SizedBox(height: 3),
-
                 Text(
                   '${book['category'] ?? '-'} · '
                   '${book['published_year'] ?? '-'} · '
@@ -451,9 +439,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
                     fontSize: 9,
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
                 Text(
                   'Stok: ${book['stock'] ?? 0}',
                   style: const TextStyle(
@@ -465,7 +451,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
               ],
             ),
           ),
-
           PopupMenuButton<String>(
             icon: const Icon(
               Icons.more_vert_rounded,
@@ -519,76 +504,85 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
   // ================= BOTTOM NAVIGATION =================
 
   Widget _buildBottomNavigation() {
-    return Container(
-      height: 60,
-      decoration: const BoxDecoration(
-        color: cream,
-        border: Border(
-          top: BorderSide(
-            color: Color(0xFFE5E0D5),
-            width: 0.8,
-          ),
+  return Container(
+    height: 60,
+    decoration: const BoxDecoration(
+      color: cream,
+      border: Border(
+        top: BorderSide(
+          color: Color(0xFFE5E0D5),
+          width: 0.8,
         ),
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: List.generate(
-            menuItems.length,
-            (index) {
-              final item = menuItems[index];
-              final bool isSelected = selectedIndex == index;
+    ),
+    child: SafeArea(
+      top: false,
+      child: Row(
+        children: List.generate(
+          menuItems.length,
+          (index) {
+            final item = menuItems[index];
+            final bool isSelected = selectedIndex == index;
 
-              return Expanded(
-                child: InkWell(
-                  onTap: () {
-                    setState(() {
-                      selectedIndex = index;
-                    });
-
-                    if (index != 1) {
-                      showMessage('Menu ${item['label']} dipilih');
-                    }
-                  },
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        item['icon'],
-                        size: 21,
+            return Expanded(
+              child: InkWell(
+                onTap: () async {
+                  if (index == 0) {
+                    // Kembali ke halaman Beranda
+                    Navigator.pop(context);
+                  } else if (index == 1) {
+                    // Halaman Buku saat ini
+                    return;
+                  } else if (index == 2) {
+                    // Buka halaman Anggota
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const KelolaAnggotaPage(),
+                      ),
+                    );
+                  } else if (index == 3) {
+                    showMessage('Halaman Peminjaman belum dibuat');
+                  } else if (index == 4) {
+                    showMessage('Halaman Akun belum dibuat');
+                  }
+                },
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      item['icon'],
+                      size: 21,
+                      color: isSelected
+                          ? navy
+                          : const Color(0xFF69624F),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      item['label'],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
                         color: isSelected
                             ? navy
                             : const Color(0xFF69624F),
+                        fontSize: 9,
+                        fontWeight: isSelected
+                            ? FontWeight.w800
+                            : FontWeight.w500,
                       ),
-
-                      const SizedBox(height: 3),
-
-                      Text(
-                        item['label'],
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isSelected
-                              ? navy
-                              : const Color(0xFF69624F),
-                          fontSize: 9,
-                          fontWeight: isSelected
-                              ? FontWeight.w800
-                              : FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
       ),
-    );
-  }
+    ),
+  );
 }
-
+}
 // ======================================================
 // FORM TAMBAH / EDIT BUKU
 // ======================================================
@@ -716,9 +710,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
                 Text(
                   isEdit ? 'Ubah Cover Buku' : 'Tambah Cover Buku',
                   style: const TextStyle(
@@ -727,9 +719,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(height: 15),
-
                 ListTile(
                   leading: const Icon(
                     Icons.photo_library_outlined,
@@ -741,7 +731,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                     pickCover(ImageSource.gallery);
                   },
                 ),
-
                 ListTile(
                   leading: const Icon(
                     Icons.camera_alt_outlined,
@@ -753,7 +742,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                     pickCover(ImageSource.camera);
                   },
                 ),
-
                 if (coverImage != null || oldCoverUrl != null)
                   ListTile(
                     leading: const Icon(
@@ -825,16 +813,24 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
         'cover_url': coverUrl,
       };
 
-      if (isEdit) {
-        await supabase
-            .from('books')
-            .update(bookData)
-            .eq('id', widget.book!['id']);
-      } else {
-        await supabase
-            .from('books')
-            .insert(bookData);
-      }
+     if (isEdit) {
+  final updatedBook = await supabase
+      .from('books')
+      .update(bookData)
+      .eq('id', widget.book!['id'])
+      .select()
+      .maybeSingle();
+
+  if (updatedBook == null) {
+    throw Exception(
+      'Data tidak berubah. Periksa izin UPDATE (RLS) tabel books.',
+    );
+  }
+} else {
+  await supabase
+      .from('books')
+      .insert(bookData);
+}
 
       if (!mounted) return;
 
@@ -877,7 +873,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
           child: Column(
             children: [
               _buildHeader(),
-
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(
@@ -890,7 +885,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildCoverUpload(),
-
                       const SizedBox(height: 16),
 
                       _buildLabel('Judul Buku *'),
@@ -932,9 +926,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                               ],
                             ),
                           ),
-
                           const SizedBox(width: 12),
-
                           Expanded(
                             child: Column(
                               crossAxisAlignment:
@@ -1001,7 +993,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
               size: 20,
             ),
           ),
-
           Expanded(
             child: Text(
               isEdit ? 'Edit Buku' : 'Tambah Buku',
@@ -1013,93 +1004,107 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
               ),
             ),
           ),
-
           const SizedBox(width: 48),
         ],
       ),
     );
   }
-
-  // ================= COVER UPLOAD =================
+    // ================= COVER UPLOAD =================
 
   Widget _buildCoverUpload() {
     final bool hasCover = coverImage != null || oldCoverUrl != null;
 
-    return InkWell(
-      onTap: showImagePicker,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: double.infinity,
-        height: 150,
-        decoration: BoxDecoration(
-          color: cream,
-          border: Border.all(
-            color: navy.withOpacity(0.45),
-          ),
-          borderRadius: BorderRadius.circular(10),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cream,
+        border: Border.all(
+          color: navy.withOpacity(0.45),
         ),
-        child: hasCover
-            ? Stack(
-                alignment: Alignment.center,
-                children: [
-                  BookCover(
-                    cover: coverImage?.path ?? oldCoverUrl,
-                    title: titleController.text,
-                    width: 85,
-                    height: 125,
-                  ),
-
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: const BoxDecoration(
-                        color: navy,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.edit_rounded,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            : const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.camera_alt_outlined,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          BookCover(
+            cover: coverImage?.path ?? oldCoverUrl,
+            title: titleController.text,
+            width: 75,
+            height: 105,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  hasCover ? 'Cover Buku' : 'Upload Cover Buku',
+                  style: const TextStyle(
                     color: navy,
-                    size: 35,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
                   ),
-
-                  SizedBox(height: 10),
-
-                  Text(
-                    'Upload Cover Buku',
-                    style: TextStyle(
-                      color: navy,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  'JPG, PNG, JPEG (maks. 2MB)',
+                  style: TextStyle(
+                    color: mutedText,
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 35,
+                  child: ElevatedButton.icon(
+                    onPressed: showImagePicker,
+                    icon: const Icon(
+                      Icons.image_outlined,
+                      size: 16,
+                    ),
+                    label: Text(
+                      hasCover ? 'Ubah Cover' : 'Tambah Cover',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: navy,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
-
-                  SizedBox(height: 5),
-
-                  Text(
-                    'JPG, PNG, JPEG (maks. 2MB)',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: mutedText,
-                      fontSize: 10,
+                ),
+                if (hasCover) ...[
+                  const SizedBox(height: 5),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        coverImage = null;
+                        oldCoverUrl = null;
+                      });
+                    },
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 25),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Hapus Cover',
+                      style: TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                 ],
-              ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1269,37 +1274,67 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
   // ================= SAVE BUTTON =================
 
   Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 44,
-      child: ElevatedButton(
-        onPressed: isSaving ? null : saveBook,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: navy,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: mutedText,
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-        child: isSaving
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-            : Text(
-                isEdit ? 'Simpan Perubahan' : 'Simpan',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 44,
+            child: OutlinedButton(
+              onPressed: isSaving
+                  ? null
+                  : () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: navy,
+                side: const BorderSide(color: navy),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
-      ),
+              child: const Text(
+                'Batal',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: SizedBox(
+            height: 44,
+            child: ElevatedButton(
+              onPressed: isSaving ? null : saveBook,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: mutedText,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Text(
+                      isEdit ? 'Simpan' : 'Simpan',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
