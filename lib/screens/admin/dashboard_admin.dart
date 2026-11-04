@@ -34,12 +34,12 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
   List<Map<String, dynamic>> recentLoans = [];
 
+  // BOTTOM NAVIGATION: HANYA 4 MENU
   final List<Map<String, dynamic>> menuItems = [
     {'icon': Icons.home_outlined, 'label': 'Beranda'},
     {'icon': Icons.menu_book_outlined, 'label': 'Buku'},
     {'icon': Icons.people_outline_rounded, 'label': 'Anggota'},
     {'icon': Icons.assignment_outlined, 'label': 'Peminjaman'},
-    {'icon': Icons.person_outline_rounded, 'label': 'Akun'},
   ];
 
   @override
@@ -47,6 +47,10 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     super.initState();
     loadDashboardData();
   }
+
+  // ==========================================
+  // LOAD DASHBOARD DATA
+  // ==========================================
 
   Future<void> loadDashboardData() async {
     if (!mounted) return;
@@ -57,62 +61,118 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     });
 
     try {
-      // TOTAL BUKU
+      // 1. TOTAL BUKU
       final booksCount = await supabase
           .from('books')
           .count(CountOption.exact);
 
-      // TOTAL ANGGOTA
+      // 2. TOTAL ANGGOTA
       final membersCount = await supabase
           .from('profiles')
           .count(CountOption.exact)
           .eq('role', 'anggota');
 
-      // DATA PEMINJAMAN
-      final response = await supabase
+      // 3. AMBIL DATA PEMINJAMAN
+      // Tidak menggunakan JOIN otomatis.
+      final borrowingResponse = await supabase
           .from('borrowings')
           .select('''
             id,
             user_id,
             book_id,
-            status,
-            created_at,
+            borrowed_at,
             due_date,
-            books (
-              title,
-              author,
-              cover_url
-            ),
-            profiles (
-              full_name
-            )
+            returned_at,
+            status,
+            created_at
           ''')
           .order('created_at', ascending: false);
 
-      final List<Map<String, dynamic>> borrowings =
-          List<Map<String, dynamic>>.from(response);
+      final borrowings = List<Map<String, dynamic>>.from(
+        borrowingResponse,
+      );
 
-      final now = DateTime.now();
+      // 4. AMBIL ID BUKU
+      final bookIds = borrowings
+          .map((item) => item['book_id'])
+          .whereType<int>()
+          .toSet()
+          .toList();
 
-      // PEMINJAMAN AKTIF
-      final active = borrowings.where((borrowing) {
-        final status =
-            borrowing['status']?.toString().toLowerCase() ?? '';
+      // 5. AMBIL ID ANGGOTA
+      final userIds = borrowings
+          .map((item) => item['user_id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
 
-        return status == 'dipinjam' ||
-            status == 'borrowed' ||
-            status == 'aktif';
+      // 6. AMBIL DATA BUKU SECARA TERPISAH
+      final Map<int, Map<String, dynamic>> booksMap = {};
+
+      if (bookIds.isNotEmpty) {
+        final booksResponse = await supabase
+            .from('books')
+            .select('id, title, author, cover_url')
+            .inFilter('id', bookIds);
+
+        for (final item in booksResponse) {
+          final book = Map<String, dynamic>.from(item);
+          final id = book['id'];
+
+          if (id is int) {
+            booksMap[id] = book;
+          }
+        }
+      }
+
+      // 7. AMBIL PROFIL ANGGOTA SECARA TERPISAH
+      // Tabel profiles tetap dipakai untuk nama peminjam.
+      final Map<String, Map<String, dynamic>> profilesMap = {};
+
+      if (userIds.isNotEmpty) {
+        final profilesResponse = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .inFilter('id', userIds);
+
+        for (final item in profilesResponse) {
+          final profile = Map<String, dynamic>.from(item);
+          final id = profile['id']?.toString();
+
+          if (id != null) {
+            profilesMap[id] = profile;
+          }
+        }
+      }
+
+      // 8. GABUNGKAN DATA BERDASARKAN ID
+      final List<Map<String, dynamic>> combinedLoans = [];
+
+      for (final borrowing in borrowings) {
+        final bookId = borrowing['book_id'];
+        final userId = borrowing['user_id']?.toString();
+
+        final book = bookId is int ? booksMap[bookId] : null;
+        final profile = userId != null
+            ? profilesMap[userId]
+            : null;
+
+        combinedLoans.add({
+          ...borrowing,
+          'books': book,
+          'profiles': profile,
+        });
+      }
+
+      // 9. PEMINJAMAN AKTIF
+      final active = combinedLoans.where((borrowing) {
+        return _isActiveStatus(borrowing['status']);
       }).toList();
 
-      // PEMINJAMAN TERLAMBAT
+      // 10. PEMINJAMAN TERLAMBAT
       final overdue = active.where((borrowing) {
-        final dueDate = DateTime.tryParse(
-          borrowing['due_date']?.toString() ?? '',
-        );
-
-        if (dueDate == null) return false;
-
-        return dueDate.isBefore(now);
+        return _isOverdue(borrowing);
       }).toList();
 
       if (!mounted) return;
@@ -122,7 +182,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         totalMembers = membersCount;
         activeLoans = active.length;
         overdueLoans = overdue.length;
-        recentLoans = borrowings.take(5).toList();
+        recentLoans = combinedLoans.take(5).toList();
         isLoading = false;
       });
     } catch (e) {
@@ -134,6 +194,49 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       });
     }
   }
+
+  // ==========================================
+  // STATUS PEMINJAMAN
+  // ==========================================
+
+  bool _isActiveStatus(dynamic value) {
+    final status = value?.toString().toLowerCase().trim() ?? '';
+
+    return [
+      'dipinjam',
+      'borrowed',
+      'aktif',
+      'active',
+    ].contains(status);
+  }
+
+  bool _isOverdue(Map<String, dynamic> borrowing) {
+    if (!_isActiveStatus(borrowing['status'])) {
+      return false;
+    }
+
+    final dueDate = DateTime.tryParse(
+      borrowing['due_date']?.toString() ?? '',
+    );
+
+    if (dueDate == null) return false;
+
+    final now = DateTime.now();
+
+    final today = DateTime(now.year, now.month, now.day);
+
+    final deadline = DateTime(
+      dueDate.year,
+      dueDate.month,
+      dueDate.day,
+    );
+
+    return deadline.isBefore(today);
+  }
+
+  // ==========================================
+  // MESSAGE
+  // ==========================================
 
   void showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -148,12 +251,23 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // NAVIGASI HALAMAN
+  // ==========================================
 
-  Future<void> navigateToPage(Widget page) async {
+  Future<void> navigateToPage(
+    int index,
+    Widget page,
+  ) async {
+    setState(() {
+      selectedIndex = index;
+    });
+
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => page),
+      MaterialPageRoute(
+        builder: (_) => page,
+      ),
     );
 
     if (!mounted) return;
@@ -162,8 +276,12 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       selectedIndex = 0;
     });
 
-    loadDashboardData();
+    await loadDashboardData();
   }
+
+  // ==========================================
+  // BUILD
+  // ==========================================
 
   @override
   Widget build(BuildContext context) {
@@ -174,6 +292,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         child: Column(
           children: [
             _buildHeader(),
+
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -198,7 +317,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // HEADER
+  // ==========================================
 
   Widget _buildHeader() {
     return Container(
@@ -223,7 +344,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               );
             },
           ),
+
           const SizedBox(width: 12),
+
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,19 +372,11 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               ],
             ),
           ),
+
+          // NOTIFIKASI
           _buildHeaderButton(
             Icons.notifications_none_rounded,
             () => showMessage('Belum ada notifikasi baru'),
-          ),
-          const SizedBox(width: 10),
-          _buildHeaderButton(
-            Icons.account_circle_outlined,
-            () {
-              setState(() {
-                selectedIndex = 4;
-              });
-              showMessage('Menu Akun');
-            },
           ),
         ],
       ),
@@ -276,7 +391,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(30),
       child: SizedBox(
-        width: 32,
+        width: 36,
         height: 36,
         child: Icon(
           icon,
@@ -287,7 +402,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // LOADING
+  // ==========================================
 
   Widget _buildLoading() {
     return const Center(
@@ -298,7 +415,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // ERROR
+  // ==========================================
 
   Widget _buildError() {
     return Center(
@@ -312,7 +431,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               color: cream,
               size: 48,
             ),
+
             const SizedBox(height: 16),
+
             const Text(
               'Data gagal dimuat',
               style: TextStyle(
@@ -321,7 +442,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                 fontWeight: FontWeight.w800,
               ),
             ),
+
             const SizedBox(height: 10),
+
             Text(
               errorMessage ?? 'Terjadi kesalahan',
               textAlign: TextAlign.center,
@@ -331,7 +454,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                 height: 1.5,
               ),
             ),
+
             const SizedBox(height: 22),
+
             ElevatedButton.icon(
               onPressed: loadDashboardData,
               icon: const Icon(Icons.refresh_rounded),
@@ -350,7 +475,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // CONTENT
+  // ==========================================
 
   Widget _buildContent() {
     return RefreshIndicator(
@@ -364,9 +491,13 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildStatistics(),
+
             const SizedBox(height: 28),
+
             _buildLoanHeader(),
+
             const SizedBox(height: 16),
+
             if (recentLoans.isEmpty)
               _buildEmptyLoans()
             else
@@ -376,7 +507,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                   child: _buildLoanCard(loan),
                 ),
               ),
+
             const SizedBox(height: 12),
+
             _buildReportButton(),
           ],
         ),
@@ -384,7 +517,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // STATISTICS
+  // ==========================================
 
   Widget _buildStatistics() {
     final statistics = [
@@ -449,7 +584,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+
               const SizedBox(height: 12),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -466,7 +603,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                       size: 22,
                     ),
                   ),
+
                   const SizedBox(width: 10),
+
                   Flexible(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
@@ -490,7 +629,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // PEMINJAMAN TERBARU
+  // ==========================================
 
   Widget _buildLoanHeader() {
     return Row(
@@ -504,10 +645,12 @@ class _DashboardAdminState extends State<DashboardAdmin> {
             fontWeight: FontWeight.w800,
           ),
         ),
+
         InkWell(
-          onTap: () {
-            navigateToPage(const PeminjamanAdminScreen());
-          },
+          onTap: () => navigateToPage(
+            3,
+            const PeminjamanAdminScreen(),
+          ),
           borderRadius: BorderRadius.circular(8),
           child: const Row(
             children: [
@@ -532,7 +675,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // EMPTY
+  // ==========================================
 
   Widget _buildEmptyLoans() {
     return Container(
@@ -574,7 +719,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // LOAN CARD
+  // ==========================================
 
   Widget _buildLoanCard(Map<String, dynamic> loan) {
     final book = loan['books'] as Map<String, dynamic>?;
@@ -583,21 +730,22 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     final title = book?['title']?.toString() ?? 'Buku';
     final author = book?['author']?.toString() ?? '-';
     final coverUrl = book?['cover_url']?.toString();
+
     final borrower =
         profile?['full_name']?.toString() ?? 'Anggota';
 
     final status =
-        loan['status']?.toString().toLowerCase() ?? '';
+        loan['status']?.toString().toLowerCase().trim() ?? '';
 
     final isOverdue = _isOverdue(loan);
 
     final statusText = isOverdue
         ? 'TERLAMBAT'
-        : status == 'dipinjam' ||
-                status == 'borrowed' ||
-                status == 'aktif'
+        : _isActiveStatus(status)
             ? 'DIPINJAM'
-            : status.toUpperCase();
+            : status.isEmpty
+                ? '-'
+                : status.toUpperCase();
 
     final statusBackground = isOverdue
         ? const Color(0xFFF9E5E0)
@@ -607,8 +755,10 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         ? const Color(0xFF9D3D30)
         : const Color(0xFF315F46);
 
-    final createdAt = DateTime.tryParse(
-      loan['created_at']?.toString() ?? '',
+    final borrowedAt = DateTime.tryParse(
+      (loan['borrowed_at'] ?? loan['created_at'])
+              ?.toString() ??
+          '',
     );
 
     return Container(
@@ -621,7 +771,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       child: Row(
         children: [
           _buildBookCover(coverUrl),
+
           const SizedBox(width: 12),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -637,7 +789,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+
                 const SizedBox(height: 4),
+
                 Text(
                   author,
                   maxLines: 1,
@@ -647,7 +801,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     fontSize: 10,
                   ),
                 ),
+
                 const SizedBox(height: 4),
+
                 Text(
                   borrower,
                   maxLines: 1,
@@ -657,11 +813,13 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     fontSize: 10,
                   ),
                 ),
+
                 const SizedBox(height: 5),
+
                 Text(
-                  createdAt == null
+                  borrowedAt == null
                       ? '-'
-                      : _formatDate(createdAt),
+                      : _formatDate(borrowedAt),
                   style: const TextStyle(
                     color: textColor,
                     fontSize: 9,
@@ -671,7 +829,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               ],
             ),
           ),
+
           const SizedBox(width: 8),
+
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: 8,
@@ -695,7 +855,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // BOOK COVER
+  // ==========================================
 
   Widget _buildBookCover(String? coverUrl) {
     return Container(
@@ -728,7 +890,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // DATE
+  // ==========================================
 
   String _formatDate(DateTime date) {
     const months = [
@@ -749,26 +913,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  bool _isOverdue(Map<String, dynamic> borrowing) {
-    final status =
-        borrowing['status']?.toString().toLowerCase() ?? '';
-
-    final isActive = status == 'dipinjam' ||
-        status == 'borrowed' ||
-        status == 'aktif';
-
-    if (!isActive) return false;
-
-    final dueDate = DateTime.tryParse(
-      borrowing['due_date']?.toString() ?? '',
-    );
-
-    if (dueDate == null) return false;
-
-    return dueDate.isBefore(DateTime.now());
-  }
-
+  // ==========================================
   // REPORT BUTTON
+  // ==========================================
 
   Widget _buildReportButton() {
     return SizedBox(
@@ -801,7 +948,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
+  // ==========================================
   // BOTTOM NAVIGATION
+  // ==========================================
 
   Widget _buildBottomNavigation() {
     return Container(
@@ -826,25 +975,26 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
               return Expanded(
                 child: InkWell(
-                  onTap: () async {
-                    setState(() {
-                      selectedIndex = index;
-                    });
-
-                    if (index == 1) {
-                      await navigateToPage(
+                  onTap: () {
+                    if (index == 0) {
+                      setState(() {
+                        selectedIndex = 0;
+                      });
+                    } else if (index == 1) {
+                      navigateToPage(
+                        1,
                         const KelolaBukuScreen(),
                       );
                     } else if (index == 2) {
-                      await navigateToPage(
+                      navigateToPage(
+                        2,
                         const KelolaAnggotaPage(),
                       );
                     } else if (index == 3) {
-                      await navigateToPage(
+                      navigateToPage(
+                        3,
                         const PeminjamanAdminScreen(),
                       );
-                    } else if (index == 4) {
-                      showMessage('Menu Akun dipilih');
                     }
                   },
                   child: Column(
@@ -857,7 +1007,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                             ? navy
                             : const Color(0xFF69624F),
                       ),
+
                       const SizedBox(height: 3),
+
                       Text(
                         item['label'] as String,
                         maxLines: 1,
