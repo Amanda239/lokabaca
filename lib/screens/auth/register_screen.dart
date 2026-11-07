@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -30,7 +31,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void initState() {
     super.initState();
 
-    // Memperbarui checklist ketika password berubah.
     _passwordController.addListener(_refreshPasswordRequirements);
     _confirmPasswordController.addListener(_refreshPasswordRequirements);
   }
@@ -52,7 +52,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  // Validasi password.
+  // VALIDASI PASSWORD
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return 'Password wajib diisi';
@@ -73,6 +73,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
+  // REGISTRASI USER
   Future<void> _register() async {
     if (_isLoading) return;
 
@@ -83,7 +84,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await Supabase.instance.client.auth.signUp(
+      final supabase = Supabase.instance.client;
+
+      final response = await supabase.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         data: {
@@ -107,7 +110,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'Akun berhasil dibuat. Silakan cek email untuk verifikasi.',
         );
       } else {
-        _showMessage('Registrasi berhasil! Silakan masuk.');
+        _showMessage(
+          'Registrasi berhasil! Silakan masuk.',
+        );
       }
 
       Navigator.pushReplacement(
@@ -126,12 +131,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } catch (error) {
       if (!mounted) return;
 
+      debugPrint('Register error: $error');
+
       _showMessage(
         'Tidak dapat terhubung ke server. Periksa koneksi internetmu.',
         isError: true,
       );
-
-      debugPrint('Register error: $error');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -139,6 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  // PESAN ERROR
   String _getAuthErrorMessage(AuthException error) {
     final message = error.message.toLowerCase();
 
@@ -164,7 +170,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return error.message;
   }
 
-  void _showMessage(String message, {bool isError = false}) {
+  // SNACKBAR
+  void _showMessage(
+    String message, {
+    bool isError = false,
+  }) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -193,7 +203,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ),
-
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 2, 24, 28),
@@ -202,7 +211,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo
+                // LOGO
                 Center(
                   child: Column(
                     children: [
@@ -233,7 +242,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 24),
 
-                // Heading
+                // JUDUL
                 const Text(
                   'Buat Akun',
                   style: TextStyle(
@@ -255,7 +264,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 21),
 
-                // Nama lengkap
+                // NAMA LENGKAP
                 AuthTextField(
                   label: 'Nama Lengkap',
                   hint: 'Masukkan nama lengkap',
@@ -271,7 +280,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // Email
+                // EMAIL
                 AuthTextField(
                   label: 'Email',
                   hint: 'Masukkan email',
@@ -291,7 +300,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // Nomor telepon
+                // NOMOR TELEPON
                 AuthTextField(
                   label: 'Nomor Telepon',
                   hint: 'Masukkan nomor telepon',
@@ -314,7 +323,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // Password
+                // PASSWORD
                 AuthTextField(
                   label: 'Password',
                   hint: 'Masukkan password',
@@ -340,7 +349,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 12),
 
-                // Checklist password
+                // CHECKLIST PASSWORD
                 PasswordRequirements(
                   password: _passwordController.text,
                   confirmPassword: _confirmPasswordController.text,
@@ -349,7 +358,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // Konfirmasi password
+                // KONFIRMASI PASSWORD
                 AuthTextField(
                   label: 'Konfirmasi Password',
                   hint: 'Masukkan ulang password',
@@ -359,7 +368,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   suffixIcon: IconButton(
                     onPressed: () {
                       setState(() {
-                        _hideConfirmPassword = !_hideConfirmPassword;
+                        _hideConfirmPassword =
+                            !_hideConfirmPassword;
                       });
                     },
                     icon: Icon(
@@ -385,7 +395,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 22),
 
-                // Tombol daftar
+                // TOMBOL DAFTAR
                 SizedBox(
                   width: double.infinity,
                   height: 47,
@@ -422,7 +432,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 19),
 
-                // Divider
+                // PEMBATAS
                 Row(
                   children: [
                     const Expanded(
@@ -448,7 +458,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // Social buttons
+                // SOCIAL BUTTON
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -468,24 +478,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 18),
 
-                // Login navigation
+                // LOGIN
                 Center(
                   child: Wrap(
                     alignment: WrapAlignment.center,
                     children: [
                       const Text(
                         'Sudah punya akun? ',
-                        style: TextStyle(fontSize: 12),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.text,
+                        ),
                       ),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
-                          );
-                        },
+                        onTap: _isLoading
+                            ? null
+                            : () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const LoginScreen(),
+                                  ),
+                                );
+                              },
                         child: const Text(
                           'Masuk',
                           style: TextStyle(
@@ -506,6 +522,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  // SOCIAL BUTTON
   Widget _socialButton({
     required IconData icon,
     required String label,
@@ -517,7 +534,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'Pendaftaran dengan $label belum diaktifkan.',
         );
       },
-      icon: Icon(icon, color: color, size: 24),
+      icon: Icon(
+        icon,
+        color: color,
+        size: 24,
+      ),
       label: Text(
         label,
         style: const TextStyle(
@@ -526,7 +547,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       ),
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: AppColors.border),
+        side: const BorderSide(
+          color: AppColors.border,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),

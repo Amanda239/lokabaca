@@ -8,8 +8,6 @@ import 'register_screen.dart';
 import '../admin/dashboard_admin.dart';
 import '../user/dashboard_screen.dart';
 
-enum LoginRole { user, admin }
-
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -22,8 +20,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  LoginRole _selectedRole = LoginRole.user;
-
   bool _hidePassword = true;
   bool _rememberMe = false;
   bool _isLoading = false;
@@ -34,6 +30,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.dispose();
     super.dispose();
   }
+
+  // ================= LOGIN =================
 
   Future<void> _login() async {
     if (_isLoading) return;
@@ -82,38 +80,30 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final String actualRole = profile['role']?.toString() ?? '';
+      // Membaca role secara otomatis
+      final String actualRole =
+          profile['role']?.toString().trim().toLowerCase() ?? '';
 
-      // Pastikan role akun sesuai dengan pilihan login
-      if (_selectedRole == LoginRole.admin && actualRole != 'admin') {
+      // Menentukan halaman berdasarkan role
+      Widget destination;
+
+      if (actualRole == 'admin') {
+        destination = const DashboardAdmin();
+      } else if (actualRole == 'user') {
+        destination = const DashboardScreen();
+      } else {
         await supabase.auth.signOut();
 
         if (!mounted) return;
 
         _showMessage(
-          'Akun ini tidak memiliki akses admin.',
+          'Role akun tidak valid. Hubungi administrator.',
           isError: true,
         );
         return;
       }
 
-      if (_selectedRole == LoginRole.user && actualRole != 'user') {
-        await supabase.auth.signOut();
-
-        if (!mounted) return;
-
-        _showMessage(
-          'Silakan pilih menu login yang sesuai.',
-          isError: true,
-        );
-        return;
-      }
-
-      // Arahkan berdasarkan role asli dari database
-      final Widget destination = actualRole == 'admin'
-          ? const DashboardAdmin()
-          : const DashboardScreen();
-
+      // Masuk ke dashboard
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -144,6 +134,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // ================= AUTH ERROR =================
+
   String _getAuthErrorMessage(AuthException error) {
     final message = error.message.toLowerCase();
 
@@ -163,6 +155,8 @@ class _LoginScreenState extends State<LoginScreen> {
     return error.message;
   }
 
+  // ================= SNACKBAR =================
+
   void _showMessage(
     String message, {
     bool isError = false,
@@ -178,6 +172,8 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
   }
+
+  // ================= MAIN UI =================
 
   @override
   Widget build(BuildContext context) {
@@ -240,6 +236,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 30),
 
+                      // JUDUL
                       const Text(
                         'Selamat Datang!',
                         style: TextStyle(
@@ -259,51 +256,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 25),
-
-                      // PILIH JENIS AKUN
-                      const Text(
-                        'Masuk sebagai',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.text,
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: AppColors.cream,
-                          borderRadius: BorderRadius.circular(13),
-                          border: Border.all(
-                            color: AppColors.border,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _roleButton(
-                                role: LoginRole.user,
-                                icon: Icons.person_outline_rounded,
-                                label: 'User',
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Expanded(
-                              child: _roleButton(
-                                role: LoginRole.admin,
-                                icon: Icons.admin_panel_settings_outlined,
-                                label: 'Admin',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
 
                       // EMAIL
                       AuthTextField(
@@ -319,6 +272,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ).hasMatch(value.trim())) {
                             return 'Masukkan email yang valid';
                           }
+
                           return null;
                         },
                       ),
@@ -350,6 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           if (value == null || value.isEmpty) {
                             return 'Password wajib diisi';
                           }
+
                           return null;
                         },
                       ),
@@ -451,7 +406,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       Row(
                         children: [
                           const Expanded(
-                            child: Divider(color: AppColors.border),
+                            child: Divider(
+                              color: AppColors.border,
+                            ),
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(
@@ -466,7 +423,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const Expanded(
-                            child: Divider(color: AppColors.border),
+                            child: Divider(
+                              color: AppColors.border,
+                            ),
                           ),
                         ],
                       ),
@@ -494,53 +453,41 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 22),
 
                       // DAFTAR
-                      if (_selectedRole == LoginRole.user)
-                        Center(
-                          child: Wrap(
-                            alignment: WrapAlignment.center,
-                            children: [
-                              const Text(
-                                'Belum punya akun? ',
+                      Center(
+                        child: Wrap(
+                          alignment: WrapAlignment.center,
+                          children: [
+                            const Text(
+                              'Belum punya akun? ',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.text,
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: _isLoading
+                                  ? null
+                                  : () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              const RegisterScreen(),
+                                        ),
+                                      );
+                                    },
+                              child: const Text(
+                                'Daftar',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.text,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.navy,
                                 ),
                               ),
-                              GestureDetector(
-                                onTap: _isLoading
-                                    ? null
-                                    : () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const RegisterScreen(),
-                                          ),
-                                        );
-                                      },
-                                child: const Text(
-                                  'Daftar',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.navy,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      if (_selectedRole == LoginRole.admin)
-                        const Center(
-                          child: Text(
-                            'Khusus administrator LokaBaca',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.grey,
                             ),
-                          ),
+                          ],
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -552,51 +499,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // TOMBOL PILIH ROLE
-  Widget _roleButton({
-    required LoginRole role,
-    required IconData icon,
-    required String label,
-  }) {
-    final bool isSelected = _selectedRole == role;
-
-    return GestureDetector(
-      onTap: _isLoading
-          ? null
-          : () {
-              setState(() {
-                _selectedRole = role;
-              });
-            },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 11),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.navy : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 18,
-              color: isSelected ? AppColors.white : AppColors.navy,
-            ),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? AppColors.white : AppColors.navy,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // ================= SOCIAL BUTTON =================
 
   Widget _socialButton({
     required IconData icon,
@@ -607,7 +510,11 @@ class _LoginScreenState extends State<LoginScreen> {
       onPressed: () {
         _showMessage('Login $label belum diaktifkan.');
       },
-      icon: Icon(icon, color: color, size: 25),
+      icon: Icon(
+        icon,
+        color: color,
+        size: 25,
+      ),
       label: Text(
         label,
         style: const TextStyle(
@@ -616,7 +523,9 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: AppColors.border),
+        side: const BorderSide(
+          color: AppColors.border,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),

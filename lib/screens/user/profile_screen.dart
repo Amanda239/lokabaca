@@ -4,6 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../auth/login_screen.dart';
 import 'user_bottom_navigation.dart';
+import 'edit_profile_screen.dart';
+import 'change_password_screen.dart';
+import 'help_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final ValueChanged<int>? onNavigationTap;
@@ -58,12 +61,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       final response = await supabase
-          .from('profiles')
-          .select(
-            'id, full_name, avatar_url, role, nis, status, created_at',
-          )
-          .eq('id', user.id)
-          .maybeSingle();
+    .from('profiles')
+    .select(
+      'id, full_name, avatar_url, role, nis, status, '
+      'created_at, phone, birth_date, gender',
+    )
+    .eq('id', user.id)
+    .maybeSingle();
 
       if (!mounted) return;
 
@@ -466,42 +470,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 children: [
                   _buildMenu(
-                    Icons.edit_outlined,
-                    'Edit Profil',
-                    () {
-                      showMessage(
-                        'Fitur edit profil belum tersedia.',
-                      );
-                    },
-                  ),
+                  Icons.edit_outlined,
+                  'Edit Profil',
+                  () async {
+                    final result = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditProfileScreen(
+                          profile: profile!,
+                        ),
+                      ),
+                    );
+
+                        if (result == true) {
+                          loadProfile();
+                        }
+                      },
+                    ),
                   const Divider(
                     height: 1,
                     indent: 55,
                     endIndent: 15,
                   ),
                   _buildMenu(
-                    Icons.lock_outline_rounded,
-                    'Ubah Password',
-                    () {
-                      showMessage(
-                        'Fitur ubah password belum tersedia.',
-                      );
-                    },
-                  ),
+                          Icons.lock_outline_rounded,
+                          'Ubah Password',
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ChangePasswordScreen(),
+                              ),
+                            );
+                          },
+                        ),
                   const Divider(
                     height: 1,
                     indent: 55,
                     endIndent: 15,
                   ),
                   _buildMenu(
-                    Icons.help_outline_rounded,
-                    'Bantuan',
-                    () {
-                      showMessage(
-                        'Hubungi administrator LokaBaca.',
-                      );
-                    },
-                  ),
+  Icons.help_outline_rounded,
+  'Bantuan',
+  () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const HelpScreen(),
+      ),
+    );
+  },
+),
                 ],
               ),
             ),
