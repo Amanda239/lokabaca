@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -27,9 +26,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _hideConfirmPassword = true;
   bool _isLoading = false;
 
-  // Pilihan role, default User
-  String _selectedRole = 'user';
-
   @override
   void initState() {
     super.initState();
@@ -56,108 +52,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  // ==========================================
-  // ROLE SELECTOR
-  // ==========================================
-
-  Widget _buildRoleSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Daftar sebagai',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.navy,
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        Container(
-          padding: const EdgeInsets.all(7),
-          decoration: BoxDecoration(
-            color: AppColors.cream,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: const Color(0xFFDED9CD),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              // PILIHAN USER
-              Expanded(
-                child: _buildRoleButton(
-                  title: 'User',
-                  icon: Icons.person_outline_rounded,
-                  role: 'user',
-                ),
-              ),
-
-              // PILIHAN ADMIN
-              Expanded(
-                child: _buildRoleButton(
-                  title: 'Admin',
-                  icon: Icons.shield_outlined,
-                  role: 'admin',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRoleButton({
-    required String title,
-    required IconData icon,
-    required String role,
-  }) {
-    final bool isSelected = _selectedRole == role;
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedRole = role;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        height: 52,
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.navy : Colors.transparent,
-          borderRadius: BorderRadius.circular(13),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.white : AppColors.navy,
-              size: 21,
-            ),
-            const SizedBox(width: 9),
-            Text(
-              title,
-              style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.navy,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ==========================================
-  // VALIDASI PASSWORD
-  // ==========================================
-
+  // Validasi password.
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return 'Password wajib diisi';
@@ -178,10 +73,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
-  // ==========================================
-  // REGISTER SUPABASE
-  // ==========================================
-
   Future<void> _register() async {
     if (_isLoading) return;
 
@@ -198,9 +89,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         data: {
           'full_name': _nameController.text.trim(),
           'phone': _phoneController.text.trim(),
-
-          // Role yang dipilih
-          'role': _selectedRole,
         },
       );
 
@@ -251,10 +139,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // ==========================================
-  // AUTH ERROR MESSAGE
-  // ==========================================
-
   String _getAuthErrorMessage(AuthException error) {
     final message = error.message.toLowerCase();
 
@@ -280,10 +164,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return error.message;
   }
 
-  // ==========================================
-  // SNACKBAR
-  // ==========================================
-
   void _showMessage(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -297,15 +177,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
   }
 
-  // ==========================================
-  // BUILD
-  // ==========================================
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
-
       appBar: AppBar(
         backgroundColor: AppColors.white,
         surfaceTintColor: Colors.transparent,
@@ -327,7 +202,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // LOGO
+                // Logo
                 Center(
                   child: Column(
                     children: [
@@ -358,7 +233,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 24),
 
-                // HEADING
+                // Heading
                 const Text(
                   'Buat Akun',
                   style: TextStyle(
@@ -380,15 +255,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 21),
 
-                // ==================================
-                // PILIHAN USER DAN ADMIN
-                // ==================================
-
-                _buildRoleSelector(),
-
-                const SizedBox(height: 21),
-
-                // NAMA LENGKAP
+                // Nama lengkap
                 AuthTextField(
                   label: 'Nama Lengkap',
                   hint: 'Masukkan nama lengkap',
@@ -404,7 +271,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // EMAIL
+                // Email
                 AuthTextField(
                   label: 'Email',
                   hint: 'Masukkan email',
@@ -424,7 +291,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // NOMOR TELEPON
+                // Nomor telepon
                 AuthTextField(
                   label: 'Nomor Telepon',
                   hint: 'Masukkan nomor telepon',
@@ -447,7 +314,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // PASSWORD
+                // Password
                 AuthTextField(
                   label: 'Password',
                   hint: 'Masukkan password',
@@ -473,7 +340,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 12),
 
-                // CHECKLIST PASSWORD
+                // Checklist password
                 PasswordRequirements(
                   password: _passwordController.text,
                   confirmPassword: _confirmPasswordController.text,
@@ -482,7 +349,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // KONFIRMASI PASSWORD
+                // Konfirmasi password
                 AuthTextField(
                   label: 'Konfirmasi Password',
                   hint: 'Masukkan ulang password',
@@ -518,7 +385,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 22),
 
-                // TOMBOL DAFTAR
+                // Tombol daftar
                 SizedBox(
                   width: double.infinity,
                   height: 47,
@@ -555,7 +422,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 19),
 
-                // DIVIDER
+                // Divider
                 Row(
                   children: [
                     const Expanded(
@@ -581,7 +448,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 13),
 
-                // SOCIAL BUTTONS
+                // Social buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -601,7 +468,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 18),
 
-                // LOGIN NAVIGATION
+                // Login navigation
                 Center(
                   child: Wrap(
                     alignment: WrapAlignment.center,
@@ -638,10 +505,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
   }
-
-  // ==========================================
-  // SOCIAL BUTTON
-  // ==========================================
 
   Widget _socialButton({
     required IconData icon,

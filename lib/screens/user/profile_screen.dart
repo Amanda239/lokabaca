@@ -8,6 +8,11 @@ import 'edit_profile_screen.dart';
 import 'change_password_screen.dart';
 import 'help_screen.dart';
 
+import 'dashboard_screen.dart';
+import 'searchpage_screen.dart';
+import 'peminjaman_screen.dart';
+import 'collection_screen.dart';
+
 class ProfileScreen extends StatefulWidget {
   final ValueChanged<int>? onNavigationTap;
 
@@ -24,7 +29,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const Color navy = Color(0xFF2E4057);
   static const Color cream = Color(0xFFF8F4EA);
   static const Color textColor = Color(0xFF304258);
-  static const Color mutedText = Color(0xFF8792A1);
+  static const Color mutedText = Color(0xFF9299A5);
+  static const Color yellow = Color(0xFFF4C95D);
+  static const Color red = Color(0xFFFF4438);
 
   final SupabaseClient supabase = Supabase.instance.client;
 
@@ -40,9 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     loadProfile();
   }
 
-  // ==========================================
-  // LOAD PROFILE FROM SUPABASE
-  // ==========================================
+  // LOAD PROFILE
 
   Future<void> loadProfile() async {
     if (!mounted) return;
@@ -61,21 +66,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       final response = await supabase
-    .from('profiles')
-    .select(
-      'id, full_name, avatar_url, role, nis, status, '
-      'created_at, phone, birth_date, gender',
-    )
-    .eq('id', user.id)
-    .maybeSingle();
+          .from('profiles')
+          .select('id, full_name, avatar_url, role, phone')
+          .eq('id', user.id)
+          .maybeSingle();
 
       if (!mounted) return;
 
       if (response == null) {
         setState(() {
           isLoading = false;
-          errorMessage =
-              'Data profil belum ditemukan. Silakan hubungi administrator.';
+          errorMessage = 'Data profil belum ditemukan.';
         });
         return;
       }
@@ -94,9 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ==========================================
-  // REDIRECT TO LOGIN
-  // ==========================================
+  // REDIRECT LOGIN
 
   void redirectToLogin() {
     Navigator.pushAndRemoveUntil(
@@ -108,9 +107,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ==========================================
+  // BOTTOM NAVIGATION
+
+  void _navigateTo(int index) {
+    if (widget.onNavigationTap != null) {
+      widget.onNavigationTap!(index);
+      return;
+    }
+
+    if (index == 4) return;
+
+    Widget? destination;
+
+    switch (index) {
+      case 0:
+        destination = const DashboardScreen();
+        break;
+      case 1:
+        destination = const SearchPageScreen();
+        break;
+      case 2:
+        destination = const PeminjamanScreen();
+        break;
+      case 3:
+        destination = const CollectionScreen();
+        break;
+    }
+
+    if (destination == null || !mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => destination!,
+      ),
+    );
+  }
+
   // LOGOUT
-  // ==========================================
 
   Future<void> logout() async {
     if (isLoggingOut) return;
@@ -121,7 +155,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return AlertDialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
           ),
           title: const Text(
             'Keluar dari Akun?',
@@ -139,18 +173,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text(
                 'Batal',
                 style: TextStyle(color: mutedText),
               ),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
+              onPressed: () => Navigator.pop(dialogContext, true),
               style: ElevatedButton.styleFrom(
                 backgroundColor: navy,
                 foregroundColor: Colors.white,
@@ -190,9 +220,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ==========================================
   // SNACKBAR
-  // ==========================================
 
   void showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -200,111 +228,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
         content: Text(message),
         backgroundColor: navy,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
       ),
     );
   }
 
-  // ==========================================
-  // BUILD
-  // ==========================================
+  // MAIN BUILD
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: navy,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(40),
-                    topRight: Radius.circular(40),
-                  ),
-                ),
-                child: isLoading
-                    ? _buildLoading()
-                    : errorMessage != null
-                        ? _buildError()
-                        : _buildContent(),
-              ),
-            ),
-          ],
-        ),
+        bottom: false,
+        child: isLoading
+            ? _buildLoading()
+            : errorMessage != null
+                ? _buildError()
+                : _buildContent(),
       ),
-
-      // Menggunakan bottom navigation yang sudah tersedia.
       bottomNavigationBar: UserBottomNavigation(
         selectedIndex: 4,
-        onTap: (index) {
-          widget.onNavigationTap?.call(index);
-        },
+        onTap: _navigateTo,
       ),
     );
   }
 
-  // ==========================================
-  // HEADER
-  // ==========================================
-
-  Widget _buildHeader() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 15),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.account_circle_rounded,
-            color: navy,
-            size: 35,
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Akun Saya',
-              style: TextStyle(
-                color: textColor,
-                fontSize: 19,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          IconButton(
-            onPressed: isLoading ? null : loadProfile,
-            icon: const Icon(
-              Icons.refresh_rounded,
-              color: navy,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================
   // LOADING
-  // ==========================================
 
   Widget _buildLoading() {
     return const Center(
       child: CircularProgressIndicator(
-        color: cream,
+        color: navy,
         strokeWidth: 2.5,
       ),
     );
   }
 
-  // ==========================================
   // ERROR
-  // ==========================================
 
   Widget _buildError() {
     return Center(
@@ -315,14 +275,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             const Icon(
               Icons.cloud_off_rounded,
-              color: cream,
+              color: navy,
               size: 45,
             ),
             const SizedBox(height: 15),
             const Text(
               'Profil gagal dimuat',
               style: TextStyle(
-                color: Colors.white,
+                color: navy,
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
               ),
@@ -332,7 +292,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               errorMessage ?? 'Terjadi kesalahan.',
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: Colors.white70,
+                color: mutedText,
                 fontSize: 11,
               ),
             ),
@@ -342,8 +302,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Coba Lagi'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: cream,
-                foregroundColor: navy,
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
               ),
             ),
           ],
@@ -352,322 +312,244 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ==========================================
-  // MAIN CONTENT
-  // ==========================================
+  // PROFILE CONTENT
 
   Widget _buildContent() {
-    final name =
-        profile?['full_name']?.toString().trim().isNotEmpty == true
-            ? profile!['full_name'].toString()
-            : 'Pengguna';
+    final currentUser = supabase.auth.currentUser;
 
-    final nis = profile?['nis']?.toString() ?? '-';
-    final role = profile?['role']?.toString() ?? 'user';
-    final status = profile?['status']?.toString() ?? '-';
+    final name = profile?['full_name']?.toString().trim().isNotEmpty == true
+        ? profile!['full_name'].toString().trim()
+        : currentUser?.userMetadata?['full_name']?.toString() ?? 'Pengguna';
+
+    final email = currentUser?.email ?? '-';
     final avatarUrl = profile?['avatar_url']?.toString();
 
     return RefreshIndicator(
       color: navy,
       backgroundColor: cream,
       onRefresh: loadProfile,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 35, 20, 30),
-        child: Column(
-          children: [
-            // FOTO PROFIL
-            _buildAvatar(avatarUrl),
-
-            const SizedBox(height: 15),
-
-            Text(
-              name,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-
-            const SizedBox(height: 7),
-
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 15,
-                vertical: 6,
-              ),
-              decoration: BoxDecoration(
-                color: cream,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                role.toUpperCase(),
-                style: const TextStyle(
-                  color: navy,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 30),
-
-            // INFORMASI PROFIL
-            _buildSectionTitle('Informasi Profil'),
-
-            const SizedBox(height: 12),
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 25),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight - 25,
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildInfo(
-                    Icons.person_outline_rounded,
-                    'Nama Lengkap',
-                    name,
-                  ),
-                  _buildDivider(),
-                  _buildInfo(
-                    Icons.badge_outlined,
-                    'NIS',
-                    nis,
-                  ),
-                  _buildDivider(),
-                  _buildInfo(
-                    Icons.manage_accounts_outlined,
-                    'Role',
-                    role,
-                  ),
-                  _buildDivider(),
-                  _buildInfo(
-                    Icons.verified_user_outlined,
-                    'Status Akun',
-                    status,
-                  ),
-                ],
-              ),
-            ),
+                  const SizedBox(height: 43),
 
-            const SizedBox(height: 25),
-
-            // PENGATURAN AKUN
-            _buildSectionTitle('Pengaturan Akun'),
-
-            const SizedBox(height: 12),
-
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  _buildMenu(
-                  Icons.edit_outlined,
-                  'Edit Profil',
-                  () async {
-                    final result = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => EditProfileScreen(
-                          profile: profile!,
-                        ),
+                  const Center(
+                    child: Text(
+                      'Akun',
+                      style: TextStyle(
+                        color: navy,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
                       ),
-                    );
-
-                        if (result == true) {
-                          loadProfile();
-                        }
-                      },
                     ),
-                  const Divider(
-                    height: 1,
-                    indent: 55,
-                    endIndent: 15,
                   ),
-                  _buildMenu(
-                          Icons.lock_outline_rounded,
-                          'Ubah Password',
-                          () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ChangePasswordScreen(),
+
+                  const SizedBox(height: 25),
+
+                  // FOTO DAN IDENTITAS USER
+
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _buildAvatar(avatarUrl),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: textColor,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
                               ),
-                            );
-                          },
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              email,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: mutedText,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
                         ),
-                  const Divider(
-                    height: 1,
-                    indent: 55,
-                    endIndent: 15,
+                      ),
+                    ],
                   ),
-                  _buildMenu(
-  Icons.help_outline_rounded,
-  'Bantuan',
-  () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const HelpScreen(),
-      ),
-    );
-  },
-),
+
+                  const SizedBox(height: 47),
+
+                  // AKUN & KEAMANAN
+                  // Menu ini membuka EditProfileScreen.
+
+                  _buildMenuItem(
+                    icon: Icons.security_outlined,
+                    title: 'Akun & Keamanan',
+                    subtitle: 'Atur info pribadi dan keamanan akunmu',
+                    onTap: _openAccountSecurity,
+                  ),
+
+                  const SizedBox(height: 42),
+
+                  // WISHLIST
+
+                  _buildMenuItem(
+                    icon: Icons.shopping_bag_outlined,
+                    title: 'Wishlist Saya',
+                    subtitle: 'Cek Wishlist yang sedang kamu tunggu',
+                    onTap: () {
+                      showMessage('Halaman Wishlist belum tersedia.');
+                    },
+                  ),
+
+                  const SizedBox(height: 42),
+
+                  // PENGATURAN
+
+                  _buildMenuItem(
+                    icon: Icons.settings_outlined,
+                    title: 'Pengaturan Aplikasi',
+                    subtitle:
+                        'Sesuaikan pengalaman membaca dan preferensi sesuai kebutuhan kamu',
+                    onTap: () {
+                      showMessage('Pengaturan aplikasi belum tersedia.');
+                    },
+                  ),
+
+                  const SizedBox(height: 42),
+
+                  // DUKUNGAN
+
+                  _buildMenuItem(
+                    icon: Icons.help_outline_rounded,
+                    title: 'Dukungan dan Layanan',
+                    subtitle:
+                        'Temukan bantuan, ajukan permintaan dan akses informasi layanan',
+                    onTap: _openHelp,
+                  ),
+
+                  const SizedBox(height: 65),
+
+                  // KELUAR
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: OutlinedButton.icon(
+                      onPressed: isLoggingOut ? null : logout,
+                      icon: isLoggingOut
+                          ? const SizedBox(
+                              width: 17,
+                              height: 17,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: red,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.logout_rounded,
+                              color: red,
+                              size: 20,
+                            ),
+                      label: Text(
+                        isLoggingOut ? 'Keluar...' : 'Keluar',
+                        style: const TextStyle(
+                          color: red,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(
+                          color: red,
+                          width: 1.3,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
-
-            const SizedBox(height: 25),
-
-            // LOGOUT
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: isLoggingOut ? null : logout,
-                icon: isLoggingOut
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.logout_rounded,
-                        size: 20,
-                      ),
-                label: Text(
-                  isLoggingOut
-                      ? 'Sedang Keluar...'
-                      : 'Keluar dari Akun',
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: cream,
-                  foregroundColor: navy,
-                  disabledBackgroundColor: mutedText,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            const Text(
-              'LokaBaca',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  // ==========================================
   // AVATAR
-  // ==========================================
 
   Widget _buildAvatar(String? avatarUrl) {
     return Container(
-      width: 112,
-      height: 112,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
+      width: 78,
+      height: 78,
+      decoration: const BoxDecoration(
+        color: yellow,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: cream,
-          width: 2,
-        ),
       ),
-      child: ClipOval(
-        child: avatarUrl != null && avatarUrl.isNotEmpty
-            ? Image.network(
-                avatarUrl,
-                width: 104,
-                height: 104,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) {
-                  return _avatarPlaceholder();
-                },
-              )
-            : _avatarPlaceholder(),
-      ),
+      clipBehavior: Clip.antiAlias,
+      child: avatarUrl != null && avatarUrl.isNotEmpty
+          ? Image.network(
+              avatarUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return _avatarPlaceholder();
+              },
+            )
+          : _avatarPlaceholder(),
     );
   }
 
   Widget _avatarPlaceholder() {
-    return Container(
-      color: cream,
-      child: const Icon(
+    return const Center(
+      child: Icon(
         Icons.person_rounded,
-        color: navy,
-        size: 65,
+        color: Colors.white,
+        size: 43,
       ),
     );
   }
 
-  // ==========================================
-  // SECTION TITLE
-  // ==========================================
+  // MENU ITEM
 
-  Widget _buildSectionTitle(String title) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 15,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-
-  // ==========================================
-  // PROFILE INFORMATION
-  // ==========================================
-
-  Widget _buildInfo(
-    IconData icon,
-    String title,
-    String value,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: cream,
-              borderRadius: BorderRadius.circular(11),
-            ),
+          SizedBox(
+            width: 42,
+            height: 42,
             child: Icon(
               icon,
               color: navy,
-              size: 21,
+              size: 32,
             ),
           ),
           const SizedBox(width: 13),
@@ -678,66 +560,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   title,
                   style: const TextStyle(
-                    color: mutedText,
-                    fontSize: 10,
+                    color: textColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 5),
                 Text(
-                  value.isEmpty ? '-' : value,
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: textColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    color: mutedText,
+                    fontSize: 11,
+                    height: 1.35,
                   ),
                 ),
               ],
             ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: navy,
+            size: 25,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDivider() {
-    return const Divider(
-      color: Color(0xFFEAE6DD),
-      height: 12,
-    );
-  }
+  // EDIT PROFILE
 
-  // ==========================================
-  // MENU
-  // ==========================================
+  void _openAccountSecurity() async {
+    if (profile == null) return;
 
-  Widget _buildMenu(
-    IconData icon,
-    String title,
-    VoidCallback onTap,
-  ) {
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 15,
-        vertical: 3,
-      ),
-      leading: Icon(
-        icon,
-        color: navy,
-        size: 22,
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditProfileScreen(
+          profile: profile!,
         ),
       ),
-      trailing: const Icon(
-        Icons.arrow_forward_ios_rounded,
-        color: mutedText,
-        size: 14,
+    );
+
+    if (result == true && mounted) {
+      await loadProfile();
+    }
+  }
+
+  // HELP
+
+  void _openHelp() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const HelpScreen(),
       ),
     );
   }

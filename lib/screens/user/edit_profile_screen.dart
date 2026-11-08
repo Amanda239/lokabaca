@@ -1,5 +1,5 @@
 
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,6 +18,7 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  // COLORS
   static const Color navy = Color(0xFF2E4057);
   static const Color cream = Color(0xFFF8F4EA);
   static const Color textColor = Color(0xFF304258);
@@ -27,16 +28,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   final SupabaseClient supabase = Supabase.instance.client;
   final ImagePicker picker = ImagePicker();
-  final formKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
-  final nameController = TextEditingController();
-  final phoneController = TextEditingController();
-  final birthDateController = TextEditingController();
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController birthDateController = TextEditingController();
 
   String? selectedGender;
   String? avatarUrl;
-  File? selectedImage;
 
+  Uint8List? selectedImageBytes;
+  String? selectedImageExtension;
+
+  bool isLoading = true;
   bool isSaving = false;
 
   final List<String> genderOptions = [
@@ -48,23 +52,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-
-    nameController.text =
-        widget.profile['full_name']?.toString() ?? '';
-
-    phoneController.text =
-        widget.profile['phone']?.toString() ?? '';
-
-    final birthDate =
-        widget.profile['birth_date']?.toString() ?? '';
-
-    birthDateController.text = _formatDate(birthDate);
-
-    selectedGender =
-        widget.profile['gender']?.toString();
-
-    avatarUrl =
-        widget.profile['avatar_url']?.toString();
+    loadProfile();
   }
 
   @override
@@ -75,7 +63,75 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  // FORMAT TANGGAL
+  // ==========================================
+  // LOAD PROFILE
+  // ==========================================
+
+  Future<void> loadProfile() async {
+    final user = supabase.auth.currentUser;
+
+    if (user == null) {
+      if (!mounted) return;
+
+      showMessage('Sesi login tidak ditemukan.');
+      Navigator.pop(context);
+      return;
+    }
+
+    try {
+      final data = await supabase
+          .from('profiles')
+          .select(
+            'id, full_name, phone, birth_date, gender, avatar_url',
+          )
+          .eq('id', user.id)
+          .single();
+
+      if (!mounted) return;
+
+      setState(() {
+        nameController.text = data['full_name']?.toString() ?? '';
+        phoneController.text = data['phone']?.toString() ?? '';
+
+        birthDateController.text = _formatDate(
+          data['birth_date']?.toString() ?? '',
+        );
+
+        selectedGender = data['gender']?.toString();
+        avatarUrl = data['avatar_url']?.toString();
+
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('LOAD PROFILE ERROR: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        nameController.text =
+            widget.profile['full_name']?.toString() ?? '';
+
+        phoneController.text =
+            widget.profile['phone']?.toString() ?? '';
+
+        birthDateController.text = _formatDate(
+          widget.profile['birth_date']?.toString() ?? '',
+        );
+
+        selectedGender = widget.profile['gender']?.toString();
+        avatarUrl = widget.profile['avatar_url']?.toString();
+
+        isLoading = false;
+      });
+
+      showMessage('Gagal mengambil data profil: $e');
+    }
+  }
+
+  // ==========================================
+  // DATE FORMAT
+  // ==========================================
+
   String _formatDate(String date) {
     if (date.isEmpty) return '';
 
@@ -90,7 +146,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  // PILIH TANGGAL LAHIR
+  String _dateForDatabase() {
+    final parts = birthDateController.text.split('-');
+
+    if (parts.length != 3) {
+      throw Exception('Format tanggal lahir tidak valid.');
+    }
+
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+
+    if (day == null || month == null || year == null) {
+      throw Exception('Tanggal lahir tidak valid.');
+    }
+
+    final date = DateTime(year, month, day);
+
+    if (date.year != year ||
+        date.month != month ||
+        date.day != day) {
+      throw Exception('Tanggal lahir tidak valid.');
+    }
+
+    return '${year.toString().padLeft(4, '0')}-'
+        '${month.toString().padLeft(2, '0')}-'
+        '${day.toString().padLeft(2, '0')}';
+  }
+
+  // ==========================================
+  // SELECT BIRTH DATE
+  // ==========================================
+
   Future<void> selectBirthDate() async {
     DateTime initialDate = DateTime(2005);
 
@@ -106,11 +193,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       } catch (_) {}
     }
 
+    final now = DateTime.now();
+
+    if (initialDate.isAfter(now)) {
+      initialDate = now;
+    }
+
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
       firstDate: DateTime(1950),
-      lastDate: DateTime.now(),
+      lastDate: now,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -126,7 +219,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       },
     );
 
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() {
         birthDateController.text =
             '${picked.day.toString().padLeft(2, '0')}-'
@@ -136,28 +229,64 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  // PILIH FOTO PROFIL
+  // ==========================================
+  // PICK PROFILE PHOTO
+  // Flutter Web & Android
+  // ==========================================
+
   Future<void> pickProfilePhoto() async {
     try {
-      final image = await picker.pickImage(
+      final XFile? image = await picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 80,
-        maxWidth: 1000,
+        imageQuality: 85,
+        maxWidth: 1200,
       );
 
-      if (image != null && mounted) {
-        setState(() {
-          selectedImage = File(image.path);
-        });
+      if (image == null) return;
+
+      final extension = image.name.split('.').last.toLowerCase();
+
+      if (!['jpg', 'jpeg', 'png'].contains(extension)) {
+        showMessage('Format foto harus JPG, JPEG, atau PNG.');
+        return;
       }
+
+      final bytes = await image.readAsBytes();
+
+      if (bytes.isEmpty) {
+        showMessage('File foto tidak valid.');
+        return;
+      }
+
+      if (bytes.length > 2 * 1024 * 1024) {
+        showMessage('Ukuran foto maksimal 2 MB.');
+        return;
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        selectedImageBytes = bytes;
+        selectedImageExtension = extension;
+      });
+
+      showMessage('Foto berhasil dipilih!');
     } catch (e) {
+      debugPrint('IMAGE PICKER ERROR: $e');
       showMessage('Gagal memilih foto: $e');
     }
   }
 
-  // UPLOAD FOTO KE SUPABASE STORAGE
+  // ==========================================
+  // UPLOAD AVATAR TO SUPABASE STORAGE
+  // ==========================================
+
   Future<String?> uploadAvatar() async {
-    if (selectedImage == null) return avatarUrl;
+    // Jika tidak memilih foto baru,
+    // gunakan URL foto yang sudah tersimpan.
+    if (selectedImageBytes == null) {
+      return avatarUrl;
+    }
 
     final user = supabase.auth.currentUser;
 
@@ -165,30 +294,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       throw Exception('Pengguna belum login.');
     }
 
-    final extension =
-        selectedImage!.path.split('.').last.toLowerCase();
+    final extension = selectedImageExtension ?? 'jpg';
 
+    final contentType = extension == 'png'
+        ? 'image/png'
+        : 'image/jpeg';
+
+    // Nama file dibuat unik agar tidak menimpa foto sebelumnya.
     final fileName =
-        '${user.id}_${DateTime.now().millisecondsSinceEpoch}.$extension';
+        'profile_${DateTime.now().millisecondsSinceEpoch}.$extension';
 
-    final path = 'avatars/$fileName';
+    // Foto disimpan di folder berdasarkan UUID user.
+    // Contoh: UUID_USER/profile_123456.jpg
+    final filePath = '${user.id}/$fileName';
 
-    await supabase.storage
-        .from('profile-avatars')
-        .upload(
-          path,
-          selectedImage!,
-          fileOptions: const FileOptions(
-            upsert: true,
-          ),
-        );
+    try {
+      await supabase.storage
+          .from('profile-avatars')
+          .uploadBinary(
+            filePath,
+            selectedImageBytes!,
+            fileOptions: FileOptions(
+              contentType: contentType,
+              upsert: false,
+            ),
+          );
 
-    return supabase.storage
-        .from('profile-avatars')
-        .getPublicUrl(path);
+      // Ambil URL publik foto yang berhasil diunggah.
+      final publicUrl = supabase.storage
+          .from('profile-avatars')
+          .getPublicUrl(filePath);
+
+      debugPrint('AVATAR UPLOAD SUCCESS: $publicUrl');
+
+      return publicUrl;
+    } catch (e) {
+      debugPrint('AVATAR UPLOAD ERROR: $e');
+      rethrow;
+    }
   }
 
-  // SIMPAN PROFIL
+  // ==========================================
+  // SAVE PROFILE
+  // ==========================================
+
   Future<void> saveProfile() async {
     if (isSaving) return;
 
@@ -196,7 +345,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     if (!formKey.currentState!.validate()) return;
 
-    if (selectedGender == null) {
+    if (selectedGender == null ||
+        !genderOptions.contains(selectedGender)) {
       showMessage('Silakan pilih jenis kelamin.');
       return;
     }
@@ -208,24 +358,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
-    setState(() => isSaving = true);
+    setState(() {
+      isSaving = true;
+    });
 
     try {
+      // Upload foto baru jika pengguna memilihnya.
       final newAvatarUrl = await uploadAvatar();
-
-      final parts = birthDateController.text.split('-');
-
-      final formattedDate =
-          '${parts[2]}-${parts[1]}-${parts[0]}';
 
       final updateData = {
         'full_name': nameController.text.trim(),
         'phone': phoneController.text.trim(),
-        'birth_date': formattedDate,
+        'birth_date': _dateForDatabase(),
         'gender': selectedGender,
         'avatar_url': newAvatarUrl,
       };
 
+      // Update data profil berdasarkan ID user login.
       await supabase
           .from('profiles')
           .update(updateData)
@@ -235,25 +384,34 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profil berhasil diperbarui!'),
-          backgroundColor: navy,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Profil berhasil diperbarui!'),
+            backgroundColor: navy,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
 
       Navigator.pop(context, true);
     } catch (e) {
+      debugPrint('SAVE PROFILE ERROR: $e');
+
       if (!mounted) return;
 
-      setState(() => isSaving = false);
+      setState(() {
+        isSaving = false;
+      });
 
       showMessage('Gagal memperbarui profil: $e');
     }
   }
 
+  // ==========================================
   // SNACKBAR
+  // ==========================================
+
   void showMessage(String message) {
     if (!mounted) return;
 
@@ -268,6 +426,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
   }
 
+  // ==========================================
+  // BUILD
+  // ==========================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -278,101 +440,95 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             _buildHeader(),
 
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  29, 15, 29, 30,
-                ),
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildPhotoSection(),
-
-                      const SizedBox(height: 65),
-
-                      const Text(
-                        'Info Pribadi',
-                        style: TextStyle(
-                          color: navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
+              child: isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: navy,
+                      ),
+                    )
+                  : Form(
+                      key: formKey,
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(
+                          25,
+                          16,
+                          25,
+                          30,
                         ),
+                        children: [
+                          _buildPhotoSection(),
+
+                          const SizedBox(height: 32),
+
+                          _buildSectionTitle('Info Pribadi'),
+
+                          const SizedBox(height: 16),
+
+                          _buildInput(
+                            label: 'Nama Lengkap',
+                            controller: nameController,
+                            hint: 'Masukkan nama lengkap',
+                            icon: Icons.person_outline_rounded,
+                          ),
+
+                          const SizedBox(height: 17),
+
+                          _buildInput(
+                            label: 'Nomor Telepon',
+                            controller: phoneController,
+                            hint: 'Masukkan nomor telepon',
+                            icon: Icons.phone_outlined,
+                            keyboardType: TextInputType.phone,
+                          ),
+
+                          const SizedBox(height: 17),
+
+                          _buildInput(
+                            label: 'Tanggal Lahir',
+                            controller: birthDateController,
+                            hint: 'DD-MM-YYYY',
+                            icon: Icons.calendar_today_outlined,
+                            readOnly: true,
+                            onTap: selectBirthDate,
+                          ),
+
+                          const SizedBox(height: 17),
+
+                          _buildGenderDropdown(),
+
+                          const SizedBox(height: 32),
+
+                          _buildSectionTitle('Email Terdaftar'),
+
+                          const SizedBox(height: 7),
+
+                          const Text(
+                            'Email ini digunakan untuk login dan menerima '
+                            'notifikasi dari LokaBaca.',
+                            style: TextStyle(
+                              color: mutedText,
+                              fontSize: 11,
+                              height: 1.5,
+                            ),
+                          ),
+
+                          const SizedBox(height: 13),
+
+                          _buildEmailField(),
+
+                          const SizedBox(height: 35),
+
+                          const Divider(
+                            color: borderColor,
+                            thickness: 1,
+                          ),
+
+                          const SizedBox(height: 22),
+
+                          _buildSaveButton(),
+                        ],
                       ),
-
-                      const SizedBox(height: 13),
-
-                      _buildInput(
-                        label: 'Nama Lengkap',
-                        controller: nameController,
-                        hint: 'Masukkan nama lengkap',
-                        icon: Icons.person_outline,
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      _buildInput(
-                        label: 'Nomor Telepon',
-                        controller: phoneController,
-                        hint: 'Masukkan nomor telepon',
-                        icon: Icons.phone_outlined,
-                        keyboardType: TextInputType.phone,
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      _buildInput(
-                        label: 'Tanggal Lahir',
-                        controller: birthDateController,
-                        hint: 'DD-MM-YYYY',
-                        icon: Icons.calendar_today_outlined,
-                        readOnly: true,
-                        onTap: selectBirthDate,
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      _buildGenderDropdown(),
-
-                      const SizedBox(height: 38),
-
-                      const Text(
-                        'Email Terdaftar',
-                        style: TextStyle(
-                          color: navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-
-                      const SizedBox(height: 3),
-
-                      const Text(
-                        'Email ini digunakan sebagai login atau menerima notifikasi dari LokaBaca.',
-                        style: TextStyle(
-                          color: mutedText,
-                          fontSize: 9,
-                        ),
-                      ),
-
-                      const SizedBox(height: 17),
-
-                      _buildEmailField(),
-
-                      const SizedBox(height: 48),
-
-                      const Divider(
-                        color: borderColor,
-                        thickness: 1,
-                      ),
-
-                      const SizedBox(height: 30),
-
-                      _buildSaveButton(),
-                    ],
-                  ),
-                ),
-              ),
+                    ),
             ),
           ],
         ),
@@ -380,10 +536,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  // ==========================================
   // HEADER
+  // ==========================================
+
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Row(
         children: [
           IconButton(
@@ -413,23 +572,52 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // FOTO PROFIL
+  // ==========================================
+  // SECTION TITLE
+  // ==========================================
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: navy,
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+
+  // ==========================================
+  // PHOTO SECTION
+  // ==========================================
+
   Widget _buildPhotoSection() {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        ClipOval(
-          child: SizedBox(
-            width: 72,
-            height: 72,
-            child: selectedImage != null
-                ? Image.file(
-                    selectedImage!,
+        Container(
+          width: 88,
+          height: 88,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: borderColor,
+              width: 1,
+            ),
+          ),
+          child: ClipOval(
+            child: selectedImageBytes != null
+                ? Image.memory(
+                    selectedImageBytes!,
+                    width: 88,
+                    height: 88,
                     fit: BoxFit.cover,
                   )
                 : avatarUrl != null && avatarUrl!.isNotEmpty
                     ? Image.network(
                         avatarUrl!,
+                        width: 88,
+                        height: 88,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) =>
                             _photoPlaceholder(),
@@ -438,33 +626,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
         ),
 
-        const SizedBox(width: 30),
+        const SizedBox(width: 20),
 
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                height: 37,
-                child: ElevatedButton(
-                  onPressed: pickProfilePhoto,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: cream,
-                    foregroundColor: textColor,
-                    elevation: 2,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+              ElevatedButton.icon(
+                onPressed: isSaving ? null : pickProfilePhoto,
+                icon: const Icon(
+                  Icons.camera_alt_outlined,
+                  size: 15,
+                ),
+                label: const Text(
+                  'Ubah Foto Profil',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
                   ),
-                  child: const Text(
-                    'Ubah Foto Profil',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: cream,
+                  foregroundColor: navy,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 13,
+                    vertical: 11,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
@@ -472,11 +662,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 8),
 
               const Text(
-                'Format foto harus jpg.jpeg.png dan ukuran file max 2mb',
+                'JPG, JPEG, atau PNG\nMaksimal ukuran 2 MB',
                 style: TextStyle(
                   color: mutedText,
-                  fontSize: 9,
-                  height: 1.3,
+                  fontSize: 10,
+                  height: 1.5,
                 ),
               ),
             ],
@@ -489,15 +679,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget _photoPlaceholder() {
     return Container(
       color: yellow,
+      alignment: Alignment.center,
       child: const Icon(
         Icons.person_rounded,
         color: Colors.white,
-        size: 42,
+        size: 48,
       ),
     );
   }
 
-  // INPUT TEXT
+  // ==========================================
+  // TEXT INPUT
+  // ==========================================
+
   Widget _buildInput({
     required String label,
     required TextEditingController controller,
@@ -507,148 +701,194 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     bool readOnly = false,
     VoidCallback? onTap,
   }) {
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.17),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        readOnly: readOnly,
-        onTap: onTap,
-        style: const TextStyle(
-          color: textColor,
-          fontSize: 12,
-        ),
-        validator: (value) {
-          if (value == null || value.trim().isEmpty) {
-            return 'Bagian ini wajib diisi';
-          }
-          return null;
-        },
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          labelStyle: const TextStyle(
-            color: mutedText,
-            fontSize: 9,
-          ),
-          hintStyle: const TextStyle(
-            color: mutedText,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: textColor,
             fontSize: 11,
+            fontWeight: FontWeight.w700,
           ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 7,
+        ),
+
+        const SizedBox(height: 8),
+
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          readOnly: readOnly,
+          onTap: onTap,
+          style: const TextStyle(
+            color: textColor,
+            fontSize: 12,
           ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return '$label wajib diisi';
+            }
+
+            return null;
+          },
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              color: mutedText,
+              fontSize: 11,
+            ),
+            filled: true,
+            fillColor: cream,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            suffixIcon: icon != null
+                ? Icon(
+                    icon,
+                    color: mutedText,
+                    size: 17,
+                  )
+                : null,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(11),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(11),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(11),
+              borderSide: const BorderSide(
+                color: navy,
+                width: 1,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(11),
+              borderSide: const BorderSide(
+                color: Colors.redAccent,
+                width: 1,
+              ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(11),
+              borderSide: const BorderSide(
+                color: Colors.redAccent,
+                width: 1,
+              ),
+            ),
+            errorStyle: const TextStyle(fontSize: 10),
           ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+        ),
+      ],
+    );
+  }
+
+  // ==========================================
+  // GENDER DROPDOWN
+  // ==========================================
+
+  Widget _buildGenderDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Jenis Kelamin',
+          style: TextStyle(
+            color: textColor,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(
-              color: navy,
-              width: 1,
+        ),
+
+        const SizedBox(height: 8),
+
+        DropdownButtonFormField<String>(
+          value: genderOptions.contains(selectedGender)
+              ? selectedGender
+              : null,
+          isExpanded: true,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: cream,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(11),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(11),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(11),
+              borderSide: const BorderSide(
+                color: navy,
+                width: 1,
+              ),
             ),
           ),
-          errorStyle: const TextStyle(fontSize: 9),
-          suffixIcon: icon != null
-              ? Icon(
-                  icon,
-                  color: mutedText,
-                  size: 16,
-                )
-              : null,
+          hint: const Text(
+            'Pilih jenis kelamin',
+            style: TextStyle(
+              color: mutedText,
+              fontSize: 11,
+            ),
+          ),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: navy,
+          ),
+          style: const TextStyle(
+            color: textColor,
+            fontSize: 12,
+          ),
+          items: genderOptions.map((gender) {
+            return DropdownMenuItem<String>(
+              value: gender,
+              child: Text(gender),
+            );
+          }).toList(),
+          onChanged: isSaving
+              ? null
+              : (value) {
+                  setState(() {
+                    selectedGender = value;
+                  });
+                },
+          validator: (value) {
+            if (value == null) {
+              return 'Pilih jenis kelamin';
+            }
+
+            return null;
+          },
         ),
-      ),
+      ],
     );
   }
 
-  // DROPDOWN JENIS KELAMIN
-  Widget _buildGenderDropdown() {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.17),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: DropdownButtonFormField<String>(
-        value: genderOptions.contains(selectedGender)
-            ? selectedGender
-            : null,
-        decoration: const InputDecoration(
-          labelText: 'Jenis Kelamin',
-          labelStyle: TextStyle(
-            color: mutedText,
-            fontSize: 9,
-          ),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.only(bottom: 5),
-        ),
-        icon: const Icon(
-          Icons.keyboard_arrow_down_rounded,
-          color: navy,
-          size: 20,
-        ),
-        style: const TextStyle(
-          color: textColor,
-          fontSize: 12,
-        ),
-        items: genderOptions.map((gender) {
-          return DropdownMenuItem(
-            value: gender,
-            child: Text(gender),
-          );
-        }).toList(),
-        onChanged: (value) {
-          setState(() {
-            selectedGender = value;
-          });
-        },
-        validator: (value) {
-          if (value == null) {
-            return 'Pilih jenis kelamin';
-          }
-          return null;
-        },
-      ),
-    );
-  }
+  // ==========================================
+  // EMAIL FIELD
+  // ==========================================
 
-  // EMAIL READ ONLY
   Widget _buildEmailField() {
-    final email =
-        supabase.auth.currentUser?.email ?? '';
+    final email = supabase.auth.currentUser?.email ?? '-';
 
     return Container(
-      height: 39,
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 13),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 14,
+      ),
       decoration: BoxDecoration(
-        color: const Color(0xFFD9D9D9),
-        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFFECECEC),
+        borderRadius: BorderRadius.circular(11),
       ),
       child: Text(
         email,
@@ -660,11 +900,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // BUTTON SIMPAN
+  // ==========================================
+  // SAVE BUTTON
+  // ==========================================
+
   Widget _buildSaveButton() {
     return SizedBox(
       width: double.infinity,
-      height: 51,
+      height: 49,
       child: ElevatedButton(
         onPressed: isSaving ? null : saveProfile,
         style: ElevatedButton.styleFrom(
@@ -686,9 +929,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               )
             : const Text(
-                'Simpan',
+                'Simpan Perubahan',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
               ),
