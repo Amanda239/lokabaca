@@ -24,29 +24,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
   int selectedTab = 0;
   int selectedNav = 2;
 
-  @override
-  void initState() {
-    super.initState();
-
-    final book = widget.selectedBook;
-
-    if (book != null) {
-      final today = DateTime.now();
-      final returnDate = today.add(const Duration(days: 14));
-
-      borrowingBooks.insert(0, {
-        'title': book['title'] ?? 'Judul Buku',
-        'author': book['author'] ?? 'Penulis',
-        'cover': book['cover'] ?? '',
-        'color': book['color'] ?? AppColors.navy,
-        'icon': book['icon'] ?? Icons.menu_book_rounded,
-        'borrowDate': today,
-        'returnDate': returnDate,
-        'status': 'Dipinjam',
-      });
-    }
-  }
-
+  // DATA BUKU YANG SEDANG DIPINJAM
   final List<Map<String, dynamic>> borrowingBooks = [
     {
       'title': 'Laut Bercerita',
@@ -56,7 +34,6 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
       'icon': Icons.waves_rounded,
       'borrowDate': DateTime(2026, 10, 12),
       'returnDate': DateTime(2026, 10, 26),
-      'status': 'Dipinjam',
     },
     {
       'title': 'Bumi',
@@ -66,10 +43,10 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
       'icon': Icons.public_rounded,
       'borrowDate': DateTime(2026, 9, 20),
       'returnDate': DateTime(2026, 10, 4),
-      'status': 'Terlambat',
     },
   ];
 
+  // DATA BUKU YANG SUDAH SELESAI
   final List<Map<String, dynamic>> completedBooks = [
     {
       'title': 'Filosofi Teras',
@@ -80,7 +57,6 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
       'borrowDate': DateTime(2026, 9, 20),
       'returnDate': DateTime(2026, 10, 4),
       'actualReturnDate': DateTime(2026, 10, 3),
-      'status': 'Selesai',
     },
     {
       'title': 'Pulang',
@@ -91,16 +67,32 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
       'borrowDate': DateTime(2026, 8, 10),
       'returnDate': DateTime(2026, 8, 24),
       'actualReturnDate': DateTime(2026, 8, 22),
-      'status': 'Selesai',
     },
   ];
 
-  List<Map<String, dynamic>> get currentBooks {
-    if (selectedTab == 0) {
-      return borrowingBooks;
-    }
+  @override
+  void initState() {
+    super.initState();
 
-    return completedBooks;
+    final book = widget.selectedBook;
+
+    if (book != null) {
+      final today = DateUtils.dateOnly(DateTime.now());
+
+      borrowingBooks.insert(0, {
+        'title': book['title'] ?? 'Judul Buku',
+        'author': book['author'] ?? 'Penulis',
+        'cover': book['cover'] ?? '',
+        'color': book['color'] ?? AppColors.navy,
+        'icon': book['icon'] ?? Icons.menu_book_rounded,
+        'borrowDate': today,
+        'returnDate': today.add(const Duration(days: 14)),
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> get currentBooks {
+    return selectedTab == 0 ? borrowingBooks : completedBooks;
   }
 
   @override
@@ -116,7 +108,9 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   _buildHeader(),
-                  const SizedBox(height: 8),
+
+                  const SizedBox(height: 7),
+
                   const Text(
                     'Pantau status buku yang kamu pinjam.',
                     style: TextStyle(
@@ -124,17 +118,26 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
                       fontSize: 11,
                     ),
                   ),
+
                   const SizedBox(height: 23),
+
                   _buildStatusTabs(),
+
                   const SizedBox(height: 21),
+
                   _buildSummary(),
-                  const SizedBox(height: 16),
-                  ...currentBooks.map(
-                    (book) => Padding(
-                      padding: const EdgeInsets.only(bottom: 13),
-                      child: _buildBorrowingCard(book),
+
+                  const SizedBox(height: 15),
+
+                  if (currentBooks.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ...currentBooks.map(
+                      (book) => Padding(
+                        padding: const EdgeInsets.only(bottom: 13),
+                        child: _buildBorrowingCard(book),
+                      ),
                     ),
-                  ),
                 ]),
               ),
             ),
@@ -154,10 +157,10 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
       children: [
         const Expanded(
           child: Text(
-            'Peminjaman',
+            'Riwayat Peminjaman',
             style: TextStyle(
               color: AppColors.navy,
-              fontSize: 23,
+              fontSize: 21,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -179,7 +182,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     );
   }
 
-  // STATUS TABS
+  // TAB STATUS
   Widget _buildStatusTabs() {
     return Container(
       padding: const EdgeInsets.all(4),
@@ -213,7 +216,11 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
 
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => selectedTab = index),
+        onTap: () {
+          setState(() {
+            selectedTab = index;
+          });
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(
@@ -223,15 +230,6 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
           decoration: BoxDecoration(
             color: active ? AppColors.navy : Colors.transparent,
             borderRadius: BorderRadius.circular(25),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: AppColors.navy.withOpacity(0.13),
-                      blurRadius: 7,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : [],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -261,7 +259,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     );
   }
 
-  // SUMMARY
+  // RINGKASAN
   Widget _buildSummary() {
     final count = currentBooks.length;
 
@@ -292,54 +290,53 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     );
   }
 
-  // BORROWING CARD
+  // KARTU BUKU
   Widget _buildBorrowingCard(Map<String, dynamic> book) {
-    final status = book['status'] as String;
-
     final borrowDate = book['borrowDate'] as DateTime;
     final returnDate = book['returnDate'] as DateTime;
     final actualReturnDate = book['actualReturnDate'] as DateTime?;
 
-    final isCompleted = status == 'Selesai';
-    final isLate = status == 'Terlambat';
+    final isCompleted = selectedTab == 1;
 
-    final isOverdue = !isCompleted &&
-        DateTime.now().isAfter(
-          DateTime(
-            returnDate.year,
-            returnDate.month,
-            returnDate.day,
-            23,
-            59,
-            59,
-          ),
-        );
+    final today = DateUtils.dateOnly(DateTime.now());
+    final dueDate = DateUtils.dateOnly(returnDate);
 
-    final displayedStatus = isOverdue ? 'Terlambat' : status;
+    final isOverdue = !isCompleted && today.isAfter(dueDate);
 
-    final displayedStatusColor = _getStatusColor(displayedStatus);
-    final displayedStatusBackground =
-        _getStatusBackground(displayedStatus);
+    final lateDays = isOverdue
+        ? today.difference(dueDate).inDays
+        : 0;
 
     final isOnTime = isCompleted &&
         actualReturnDate != null &&
-        !actualReturnDate.isAfter(returnDate);
+        !DateUtils.dateOnly(actualReturnDate).isAfter(dueDate);
+
+    final isLateReturn = isCompleted &&
+        actualReturnDate != null &&
+        DateUtils.dateOnly(actualReturnDate).isAfter(dueDate);
+
+    final status = isCompleted
+        ? 'Selesai'
+        : isOverdue
+            ? 'Terlambat'
+            : 'Dipinjam';
+
+    final statusColor = _getStatusColor(status);
+    final statusBackground = _getStatusBackground(status);
 
     final timingLabel = isCompleted
-        ? (isOnTime
-            ? 'Dikembalikan tepat waktu'
-            : 'Dikembalikan terlambat')
-        : (isOverdue || isLate
-            ? 'Terlambat mengembalikan'
-            : 'Tepat waktu');
+        ? actualReturnDate == null
+            ? 'Tanggal pengembalian belum tersedia'
+            : isOnTime
+                ? 'Dikembalikan tepat waktu'
+                : 'Dikembalikan terlambat'
+        : isOverdue
+            ? 'Terlambat $lateDays hari'
+            : 'Tepat waktu';
 
-    final timingColor = isCompleted
-        ? (isOnTime
-            ? const Color(0xFF43845B)
-            : const Color(0xFFC54B4B))
-        : (isOverdue || isLate
-            ? const Color(0xFFC54B4B)
-            : const Color(0xFF43845B));
+    final timingColor = isLateReturn || isOverdue
+        ? const Color(0xFFC54B4B)
+        : const Color(0xFF43845B);
 
     return Container(
       padding: const EdgeInsets.all(11),
@@ -358,143 +355,178 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          // COVER BUKU DI KIRI
-          SizedBox(
-            width: 79,
-            height: 112,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(9),
-              child: Image.asset(
-                book['cover'] as String,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) {
-                  return Container(
-                    color: book['color'] as Color,
-                    alignment: Alignment.center,
-                    child: Icon(
-                      book['icon'] as IconData,
-                      color: AppColors.yellow,
-                      size: 30,
-                    ),
-                  );
-                },
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // COVER BUKU
+              SizedBox(
+                width: 79,
+                height: 112,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: Image.asset(
+                    book['cover'] as String,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) {
+                      return Container(
+                        color: book['color'] as Color,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          book['icon'] as IconData,
+                          color: AppColors.yellow,
+                          size: 30,
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 11),
 
-          // INFORMASI BUKU DI TENGAH
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    book['title'] as String,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      height: 1.25,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    book['author'] as String,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.grey,
-                      fontSize: 9,
-                    ),
-                  ),
-                  const SizedBox(height: 9),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        isCompleted && isOnTime
-                            ? Icons.check_circle_rounded
-                            : (isOverdue ||
-                                    isLate ||
-                                    (isCompleted && !isOnTime)
-                                ? Icons.error_rounded
-                                : Icons.access_time_filled_rounded),
-                        size: 12,
-                        color: timingColor,
+              const SizedBox(width: 11),
+
+              // INFORMASI BUKU
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      book['title'] as String,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          timingLabel,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: timingColor,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      book['author'] as String,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.grey,
+                        fontSize: 9,
+                      ),
+                    ),
+
+                    const SizedBox(height: 9),
+
+                    Row(
+                      children: [
+                        Icon(
+                          isLateReturn || isOverdue
+                              ? Icons.error_rounded
+                              : Icons.check_circle_rounded,
+                          size: 12,
+                          color: timingColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            timingLabel,
+                            style: TextStyle(
+                              color: timingColor,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 9),
+
+                    _buildDateInfo(
+                      icon: Icons.calendar_today_rounded,
+                      label: 'Mulai',
+                      date: borrowDate,
+                    ),
+
+                    const SizedBox(height: 5),
+
+                    _buildDateInfo(
+                      icon: Icons.event_rounded,
+                      label: isCompleted ? 'Kembali' : 'Batas',
+                      date: isCompleted && actualReturnDate != null
+                          ? actualReturnDate
+                          : returnDate,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 7),
+
+              // STATUS
+              Container(
+                constraints: const BoxConstraints(maxWidth: 78),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: statusBackground,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  status,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // INFORMASI DENDA
+          if (isOverdue || isLateReturn) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF0F0),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: Color(0xFFC54B4B),
+                    size: 16,
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      isOverdue
+                          ? 'Buku terlambat $lateDays hari. Silakan hubungi admin untuk informasi nominal denda.'
+                          : 'Buku dikembalikan melewati batas waktu. Silakan periksa informasi denda kepada admin.',
+                      style: const TextStyle(
+                        color: Color(0xFFC54B4B),
+                        fontSize: 9,
+                        height: 1.4,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 9),
-                  _buildDateInfo(
-                    icon: Icons.calendar_today_rounded,
-                    label: 'Mulai',
-                    date: borrowDate,
-                  ),
-                  const SizedBox(height: 5),
-                  _buildDateInfo(
-                    icon: isCompleted
-                        ? Icons.event_available_rounded
-                        : Icons.event_rounded,
-                    label: isCompleted ? 'Kembali' : 'Batas',
-                    date: isCompleted && actualReturnDate != null
-                        ? actualReturnDate
-                        : returnDate,
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(width: 7),
-
-          // BADGE STATUS DI KANAN
-          Container(
-            constraints: const BoxConstraints(maxWidth: 78),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 6,
-            ),
-            decoration: BoxDecoration(
-              color: displayedStatusBackground,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              displayedStatus,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: displayedStatusColor,
-                fontSize: 8,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
+          ],
         ],
       ),
     );
   }
 
-  // DATE INFO
+  // INFORMASI TANGGAL
   Widget _buildDateInfo({
     required IconData icon,
     required String label,
@@ -531,25 +563,67 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     );
   }
 
+  // EMPTY STATE
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        vertical: 40,
+        horizontal: 20,
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.cream,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              selectedTab == 0
+                  ? Icons.menu_book_rounded
+                  : Icons.check_circle_outline_rounded,
+              color: AppColors.navy,
+              size: 38,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            selectedTab == 0
+                ? 'Belum Ada Peminjaman'
+                : 'Belum Ada Riwayat Selesai',
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            'Buku yang kamu pinjam akan muncul di sini.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.grey,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // FORMAT TANGGAL
   String _formatDate(DateTime date) {
     const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'Mei',
-      'Jun',
-      'Jul',
-      'Agu',
-      'Sep',
-      'Okt',
-      'Nov',
-      'Des',
+      'Jan', 'Feb', 'Mar', 'Apr',
+      'Mei', 'Jun', 'Jul', 'Agu',
+      'Sep', 'Okt', 'Nov', 'Des',
     ];
 
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
+  // WARNA STATUS
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Selesai':
@@ -572,7 +646,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     }
   }
 
-  // NAVIGATION
+  // NAVIGASI
   void _navigateTo(int index) {
     if (index == selectedNav) return;
 
@@ -582,19 +656,14 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
       case 0:
         destination = const DashboardScreen();
         break;
-
       case 1:
         destination = const SearchPageScreen();
         break;
-
       case 2:
-        // Sudah berada di halaman Peminjaman.
         return;
-
       case 3:
         destination = const CollectionScreen();
         break;
-
       case 4:
         destination = const ProfileScreen();
         break;
@@ -606,17 +675,6 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => destination!,
-      ),
-    );
-  }
-
-  // SNACKBAR
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.navy,
       ),
     );
   }
