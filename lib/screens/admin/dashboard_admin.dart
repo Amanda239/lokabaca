@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'kelola_buku.dart';
 import 'kelola_anggota.dart';
 import 'peminjaman_admin.dart';
+import 'admin_bottom_navigation.dart';
 
 class DashboardAdmin extends StatefulWidget {
   const DashboardAdmin({super.key});
@@ -34,23 +35,15 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
   List<Map<String, dynamic>> recentLoans = [];
 
-  // BOTTOM NAVIGATION: HANYA 4 MENU
-  final List<Map<String, dynamic>> menuItems = [
-    {'icon': Icons.home_outlined, 'label': 'Beranda'},
-    {'icon': Icons.menu_book_outlined, 'label': 'Buku'},
-    {'icon': Icons.people_outline_rounded, 'label': 'Anggota'},
-    {'icon': Icons.assignment_outlined, 'label': 'Peminjaman'},
-  ];
-
   @override
   void initState() {
     super.initState();
     loadDashboardData();
   }
 
-  // ==========================================
+  // =========================
   // LOAD DASHBOARD DATA
-  // ==========================================
+  // =========================
 
   Future<void> loadDashboardData() async {
     if (!mounted) return;
@@ -61,19 +54,15 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     });
 
     try {
-      // 1. TOTAL BUKU
       final booksCount = await supabase
           .from('books')
           .count(CountOption.exact);
 
-      // 2. TOTAL ANGGOTA
       final membersCount = await supabase
           .from('profiles')
           .count(CountOption.exact)
           .eq('role', 'anggota');
 
-      // 3. AMBIL DATA PEMINJAMAN
-      // Tidak menggunakan JOIN otomatis.
       final borrowingResponse = await supabase
           .from('borrowings')
           .select('''
@@ -88,18 +77,15 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           ''')
           .order('created_at', ascending: false);
 
-      final borrowings = List<Map<String, dynamic>>.from(
-        borrowingResponse,
-      );
+      final borrowings =
+          List<Map<String, dynamic>>.from(borrowingResponse);
 
-      // 4. AMBIL ID BUKU
       final bookIds = borrowings
           .map((item) => item['book_id'])
           .whereType<int>()
           .toSet()
           .toList();
 
-      // 5. AMBIL ID ANGGOTA
       final userIds = borrowings
           .map((item) => item['user_id']?.toString())
           .whereType<String>()
@@ -107,7 +93,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           .toSet()
           .toList();
 
-      // 6. AMBIL DATA BUKU SECARA TERPISAH
       final Map<int, Map<String, dynamic>> booksMap = {};
 
       if (bookIds.isNotEmpty) {
@@ -126,8 +111,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         }
       }
 
-      // 7. AMBIL PROFIL ANGGOTA SECARA TERPISAH
-      // Tabel profiles tetap dipakai untuk nama peminjam.
       final Map<String, Map<String, dynamic>> profilesMap = {};
 
       if (userIds.isNotEmpty) {
@@ -146,7 +129,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         }
       }
 
-      // 8. GABUNGKAN DATA BERDASARKAN ID
       final List<Map<String, dynamic>> combinedLoans = [];
 
       for (final borrowing in borrowings) {
@@ -154,9 +136,8 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         final userId = borrowing['user_id']?.toString();
 
         final book = bookId is int ? booksMap[bookId] : null;
-        final profile = userId != null
-            ? profilesMap[userId]
-            : null;
+        final profile =
+            userId != null ? profilesMap[userId] : null;
 
         combinedLoans.add({
           ...borrowing,
@@ -165,12 +146,10 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         });
       }
 
-      // 9. PEMINJAMAN AKTIF
       final active = combinedLoans.where((borrowing) {
         return _isActiveStatus(borrowing['status']);
       }).toList();
 
-      // 10. PEMINJAMAN TERLAMBAT
       final overdue = active.where((borrowing) {
         return _isOverdue(borrowing);
       }).toList();
@@ -195,10 +174,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     }
   }
 
-  // ==========================================
-  // STATUS PEMINJAMAN
-  // ==========================================
-
   bool _isActiveStatus(dynamic value) {
     final status = value?.toString().toLowerCase().trim() ?? '';
 
@@ -222,7 +197,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     if (dueDate == null) return false;
 
     final now = DateTime.now();
-
     final today = DateTime(now.year, now.month, now.day);
 
     final deadline = DateTime(
@@ -234,11 +208,13 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     return deadline.isBefore(today);
   }
 
-  // ==========================================
+  // =========================
   // MESSAGE
-  // ==========================================
+  // =========================
 
   void showMessage(String message) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -251,9 +227,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // ==========================================
-  // NAVIGASI HALAMAN
-  // ==========================================
+  // =========================
+  // NAVIGATION
+  // =========================
 
   Future<void> navigateToPage(
     int index,
@@ -265,9 +241,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => page,
-      ),
+      MaterialPageRoute(builder: (_) => page),
     );
 
     if (!mounted) return;
@@ -279,9 +253,61 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     await loadDashboardData();
   }
 
-  // ==========================================
+  void _handleBottomNavigation(int index) {
+    if (index == selectedIndex) return;
+
+    switch (index) {
+      case 0:
+        setState(() => selectedIndex = 0);
+        break;
+
+      case 1:
+        navigateToPage(
+          1,
+          const KelolaBukuScreen(),
+        );
+        break;
+
+      case 2:
+        navigateToPage(
+          2,
+          const KelolaAnggotaPage(),
+        );
+        break;
+
+      case 3:
+        navigateToPage(
+          3,
+          const PeminjamanAdminScreen(),
+        );
+        break;
+
+      case 4:
+        navigateToPage(
+          4,
+          const AdminProfileScreen(),
+        );
+        break;
+    }
+  }
+
+  void _openProfile() {
+    navigateToPage(
+      4,
+      const AdminProfileScreen(),
+    );
+  }
+
+  void _openReport() {
+    navigateToPage(
+      0,
+      const AdminReportScreen(),
+    );
+  }
+
+  // =========================
   // BUILD
-  // ==========================================
+  // =========================
 
   @override
   Widget build(BuildContext context) {
@@ -292,7 +318,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         child: Column(
           children: [
             _buildHeader(),
-
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -313,13 +338,16 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavigation(),
+      bottomNavigationBar: AdminBottomNavigation(
+        currentIndex: selectedIndex,
+        onTap: _handleBottomNavigation,
+      ),
     );
   }
 
-  // ==========================================
+  // =========================
   // HEADER
-  // ==========================================
+  // =========================
 
   Widget _buildHeader() {
     return Container(
@@ -332,7 +360,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
             width: 78,
             height: 78,
             fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
+            errorBuilder: (_, __, ___) {
               return const SizedBox(
                 width: 78,
                 height: 78,
@@ -344,9 +372,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               );
             },
           ),
-
           const SizedBox(width: 12),
-
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,6 +404,14 @@ class _DashboardAdminState extends State<DashboardAdmin> {
             Icons.notifications_none_rounded,
             () => showMessage('Belum ada notifikasi baru'),
           ),
+
+          const SizedBox(width: 5),
+
+          // PROFIL ADMIN
+          _buildHeaderButton(
+            Icons.account_circle_rounded,
+            _openProfile,
+          ),
         ],
       ),
     );
@@ -402,9 +436,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // ==========================================
+  // =========================
   // LOADING
-  // ==========================================
+  // =========================
 
   Widget _buildLoading() {
     return const Center(
@@ -415,9 +449,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // ==========================================
+  // =========================
   // ERROR
-  // ==========================================
+  // =========================
 
   Widget _buildError() {
     return Center(
@@ -431,9 +465,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               color: cream,
               size: 48,
             ),
-
             const SizedBox(height: 16),
-
             const Text(
               'Data gagal dimuat',
               style: TextStyle(
@@ -442,9 +474,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                 fontWeight: FontWeight.w800,
               ),
             ),
-
             const SizedBox(height: 10),
-
             Text(
               errorMessage ?? 'Terjadi kesalahan',
               textAlign: TextAlign.center,
@@ -454,9 +484,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                 height: 1.5,
               ),
             ),
-
             const SizedBox(height: 22),
-
             ElevatedButton.icon(
               onPressed: loadDashboardData,
               icon: const Icon(Icons.refresh_rounded),
@@ -475,9 +503,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // ==========================================
-  // CONTENT
-  // ==========================================
+  // =========================
+  // DASHBOARD CONTENT
+  // =========================
 
   Widget _buildContent() {
     return RefreshIndicator(
@@ -491,11 +519,8 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildStatistics(),
-
             const SizedBox(height: 28),
-
             _buildLoanHeader(),
-
             const SizedBox(height: 16),
 
             if (recentLoans.isEmpty)
@@ -509,7 +534,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               ),
 
             const SizedBox(height: 12),
-
             _buildReportButton(),
           ],
         ),
@@ -517,9 +541,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // ==========================================
+  // =========================
   // STATISTICS
-  // ==========================================
+  // =========================
 
   Widget _buildStatistics() {
     final statistics = [
@@ -554,15 +578,15 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 1.45,
+        childAspectRatio: 1.55,
       ),
       itemBuilder: (context, index) {
         final item = statistics[index];
 
         return Container(
           padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 12,
+            horizontal: 10,
+            vertical: 10,
           ),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -578,21 +602,21 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               Text(
                 item['title'] as String,
                 textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: mutedText,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-
-              const SizedBox(height: 12),
-
+              const SizedBox(height: 9),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    width: 42,
-                    height: 42,
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
                       color: cream,
                       borderRadius: BorderRadius.circular(12),
@@ -600,12 +624,10 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     child: Icon(
                       item['icon'] as IconData,
                       color: navy,
-                      size: 22,
+                      size: 32,
                     ),
                   ),
-
-                  const SizedBox(width: 10),
-
+                  const SizedBox(width: 9),
                   Flexible(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
@@ -613,7 +635,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                         '${item['value']}',
                         style: const TextStyle(
                           color: navy,
-                          fontSize: 31,
+                          fontSize: 30,
                           fontWeight: FontWeight.w800,
                           letterSpacing: -1,
                         ),
@@ -629,9 +651,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // ==========================================
-  // PEMINJAMAN TERBARU
-  // ==========================================
+  // =========================
+  // LOAN HEADER
+  // =========================
 
   Widget _buildLoanHeader() {
     return Row(
@@ -645,7 +667,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
             fontWeight: FontWeight.w800,
           ),
         ),
-
         InkWell(
           onTap: () => navigateToPage(
             3,
@@ -674,10 +695,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       ],
     );
   }
-
-  // ==========================================
-  // EMPTY
-  // ==========================================
 
   Widget _buildEmptyLoans() {
     return Container(
@@ -719,9 +736,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // ==========================================
+  // =========================
   // LOAN CARD
-  // ==========================================
+  // =========================
 
   Widget _buildLoanCard(Map<String, dynamic> loan) {
     final book = loan['books'] as Map<String, dynamic>?;
@@ -756,9 +773,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         : const Color(0xFF315F46);
 
     final borrowedAt = DateTime.tryParse(
-      (loan['borrowed_at'] ?? loan['created_at'])
-              ?.toString() ??
-          '',
+      (loan['borrowed_at'] ?? loan['created_at'])?.toString() ?? '',
     );
 
     return Container(
@@ -771,9 +786,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       child: Row(
         children: [
           _buildBookCover(coverUrl),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -789,9 +802,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   author,
                   maxLines: 1,
@@ -801,9 +812,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     fontSize: 10,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   borrower,
                   maxLines: 1,
@@ -813,9 +822,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     fontSize: 10,
                   ),
                 ),
-
                 const SizedBox(height: 5),
-
                 Text(
                   borrowedAt == null
                       ? '-'
@@ -829,9 +836,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               ],
             ),
           ),
-
           const SizedBox(width: 8),
-
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: 8,
@@ -855,10 +860,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // ==========================================
-  // BOOK COVER
-  // ==========================================
-
   Widget _buildBookCover(String? coverUrl) {
     return Container(
       width: 52,
@@ -872,7 +873,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           ? Image.network(
               coverUrl,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
+              errorBuilder: (_, __, ___) {
                 return _buildCoverPlaceholder();
               },
             )
@@ -889,10 +890,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       ),
     );
   }
-
-  // ==========================================
-  // DATE
-  // ==========================================
 
   String _formatDate(DateTime date) {
     const months = [
@@ -913,18 +910,16 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  // ==========================================
+  // =========================
   // REPORT BUTTON
-  // ==========================================
+  // =========================
 
   Widget _buildReportButton() {
     return SizedBox(
       width: double.infinity,
       height: 42,
       child: OutlinedButton.icon(
-        onPressed: () {
-          showMessage('Halaman laporan akan dibuka');
-        },
+        onPressed: _openReport,
         icon: const Icon(
           Icons.insert_chart_outlined_rounded,
           size: 18,
@@ -947,90 +942,725 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       ),
     );
   }
+}
 
-  // ==========================================
-  // BOTTOM NAVIGATION
-  // ==========================================
+// =====================================================
+// HALAMAN PROFIL ADMIN
+// =====================================================
 
-  Widget _buildBottomNavigation() {
-    return Container(
-      height: 58,
-      decoration: const BoxDecoration(
-        color: cream,
-        border: Border(
-          top: BorderSide(
-            color: Color(0xFFE4DFD4),
-            width: 0.8,
+class AdminProfileScreen extends StatefulWidget {
+  const AdminProfileScreen({super.key});
+
+  @override
+  State<AdminProfileScreen> createState() =>
+      _AdminProfileScreenState();
+}
+
+class _AdminProfileScreenState extends State<AdminProfileScreen> {
+  static const navy = Color(0xFF2E4057);
+  static const cream = Color(0xFFF8F4EA);
+
+  final supabase = Supabase.instance.client;
+
+  Map<String, dynamic>? profile;
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
+
+  Future<void> loadProfile() async {
+    try {
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('Admin belum login.');
+      }
+
+      final response = await supabase
+          .from('profiles')
+          .select('id, full_name, role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      setState(() {
+        profile = response;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        error = e.toString();
+        loading = false;
+      });
+    }
+  }
+
+  Future<void> logout() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Keluar Akun'),
+        content: const Text(
+          'Apakah kamu yakin ingin keluar dari akun admin?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: navy,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await supabase.auth.signOut();
+
+      if (!mounted) return;
+
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal keluar: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = supabase.auth.currentUser;
+
+    final name = profile?['full_name']?.toString() ?? 'Admin';
+    final email = user?.email ?? '-';
+    final role = profile?['role']?.toString() ?? 'admin';
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: navy,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Profil Admin',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: List.generate(
-            menuItems.length,
-            (index) {
-              final item = menuItems[index];
-              final isSelected = selectedIndex == index;
-
-              return Expanded(
-                child: InkWell(
-                  onTap: () {
-                    if (index == 0) {
-                      setState(() {
-                        selectedIndex = 0;
-                      });
-                    } else if (index == 1) {
-                      navigateToPage(
-                        1,
-                        const KelolaBukuScreen(),
-                      );
-                    } else if (index == 2) {
-                      navigateToPage(
-                        2,
-                        const KelolaAnggotaPage(),
-                      );
-                    } else if (index == 3) {
-                      navigateToPage(
-                        3,
-                        const PeminjamanAdminScreen(),
-                      );
-                    }
-                  },
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+      body: loading
+          ? const Center(
+              child: CircularProgressIndicator(color: navy),
+            )
+          : error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: navy,
+                          size: 42,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          error!,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: loadProfile,
+                          child: const Text('Coba Lagi'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: loadProfile,
+                  child: ListView(
+                    padding: const EdgeInsets.all(20),
                     children: [
-                      Icon(
-                        item['icon'] as IconData,
-                        size: 21,
-                        color: isSelected
-                            ? navy
-                            : const Color(0xFF69624F),
+                      const SizedBox(height: 25),
+                      Center(
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: const BoxDecoration(
+                            color: cream,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.account_circle_rounded,
+                            size: 85,
+                            color: navy,
+                          ),
+                        ),
                       ),
-
-                      const SizedBox(height: 3),
-
+                      const SizedBox(height: 15),
                       Text(
-                        item['label'] as String,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: isSelected
-                              ? FontWeight.w800
-                              : FontWeight.w500,
-                          color: isSelected
-                              ? navy
-                              : const Color(0xFF69624F),
+                        name,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: navy,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        email,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cream,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            role.toUpperCase(),
+                            style: const TextStyle(
+                              color: navy,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 35),
+                      _profileItem(
+                        Icons.person_outline_rounded,
+                        'Nama Lengkap',
+                        name,
+                      ),
+                      _profileItem(
+                        Icons.email_outlined,
+                        'Email',
+                        email,
+                      ),
+                      _profileItem(
+                        Icons.admin_panel_settings_outlined,
+                        'Role',
+                        role,
+                      ),
+                      const SizedBox(height: 30),
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: logout,
+                          icon: const Icon(Icons.logout_rounded),
+                          label: const Text(
+                            'Keluar dari Akun',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: navy,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              );
-            },
+    );
+  }
+
+  Widget _profileItem(
+    IconData icon,
+    String title,
+    String value,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: cream,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: navy, size: 23),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: navy,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =====================================================
+// HALAMAN LAPORAN ADMIN
+// =====================================================
+
+class AdminReportScreen extends StatefulWidget {
+  const AdminReportScreen({super.key});
+
+  @override
+  State<AdminReportScreen> createState() =>
+      _AdminReportScreenState();
+}
+
+class _AdminReportScreenState extends State<AdminReportScreen> {
+  static const navy = Color(0xFF2E4057);
+  static const cream = Color(0xFFF8F4EA);
+  static const muted = Color(0xFF8792A1);
+
+  final supabase = Supabase.instance.client;
+
+  bool loading = true;
+  String? error;
+
+  int totalBorrowings = 0;
+  int activeBorrowings = 0;
+  int returnedBorrowings = 0;
+  int overdueBorrowings = 0;
+
+  List<Map<String, dynamic>> borrowings = [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadReport();
+  }
+
+  Future<void> loadReport() async {
+    if (!mounted) return;
+
+    setState(() {
+      loading = true;
+      error = null;
+    });
+
+    try {
+      final response = await supabase
+          .from('borrowings')
+          .select('''
+            id,
+            user_id,
+            book_id,
+            borrowed_at,
+            due_date,
+            returned_at,
+            status,
+            created_at
+          ''')
+          .order('created_at', ascending: false);
+
+      final data = List<Map<String, dynamic>>.from(response);
+
+      int active = 0;
+      int returned = 0;
+      int overdue = 0;
+
+      for (final item in data) {
+        final status =
+            item['status']?.toString().toLowerCase().trim() ?? '';
+
+        final isActive = [
+          'dipinjam',
+          'borrowed',
+          'aktif',
+          'active',
+        ].contains(status);
+
+        if (isActive) {
+          active++;
+
+          final dueDate = DateTime.tryParse(
+            item['due_date']?.toString() ?? '',
+          );
+
+          if (dueDate != null) {
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            final deadline = DateTime(
+              dueDate.year,
+              dueDate.month,
+              dueDate.day,
+            );
+
+            if (deadline.isBefore(today)) {
+              overdue++;
+            }
+          }
+        }
+
+        if ([
+          'dikembalikan',
+          'returned',
+          'selesai',
+        ].contains(status)) {
+          returned++;
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        borrowings = data;
+        totalBorrowings = data.length;
+        activeBorrowings = active;
+        returnedBorrowings = returned;
+        overdueBorrowings = overdue;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+        error = e.toString();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: navy,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Laporan Perpustakaan',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
           ),
         ),
+      ),
+      body: loading
+          ? const Center(
+              child: CircularProgressIndicator(color: navy),
+            )
+          : error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.cloud_off_outlined,
+                          color: navy,
+                          size: 45,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Laporan gagal dimuat',
+                          style: TextStyle(
+                            color: navy,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                        const SizedBox(height: 15),
+                        ElevatedButton(
+                          onPressed: loadReport,
+                          child: const Text('Coba Lagi'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: loadReport,
+                  color: navy,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(18),
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: navy,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Laporan LokaBaca',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Ringkasan aktivitas peminjaman perpustakaan.',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      const Text(
+                        'Ringkasan Peminjaman',
+                        style: TextStyle(
+                          color: navy,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 1.45,
+                        children: [
+                          _reportCard(
+                            'Total Peminjaman',
+                            totalBorrowings,
+                            Icons.library_books_outlined,
+                          ),
+                          _reportCard(
+                            'Sedang Dipinjam',
+                            activeBorrowings,
+                            Icons.menu_book_rounded,
+                          ),
+                          _reportCard(
+                            'Dikembalikan',
+                            returnedBorrowings,
+                            Icons.assignment_turned_in_outlined,
+                          ),
+                          _reportCard(
+                            'Terlambat',
+                            overdueBorrowings,
+                            Icons.warning_amber_rounded,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 25),
+                      const Text(
+                        'Riwayat Peminjaman',
+                        style: TextStyle(
+                          color: navy,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (borrowings.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(25),
+                          decoration: BoxDecoration(
+                            color: cream,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'Belum ada data laporan.',
+                              style: TextStyle(
+                                color: muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        ...borrowings.map(_reportLoanItem),
+                      const SizedBox(height: 25),
+                      SizedBox(
+                        height: 45,
+                        child: OutlinedButton.icon(
+                          onPressed: loadReport,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Perbarui Laporan'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: navy,
+                            side: const BorderSide(color: navy),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+    );
+  }
+
+  Widget _reportCard(
+    String title,
+    int value,
+    IconData icon,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: cream,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE8E4DB)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: navy, size: 27),
+          const SizedBox(height: 9),
+          Text(
+            '$value',
+            style: const TextStyle(
+              color: navy,
+              fontSize: 25,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: muted,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _reportLoanItem(Map<String, dynamic> item) {
+    final status =
+        item['status']?.toString().toUpperCase() ?? '-';
+
+    final date = DateTime.tryParse(
+      (item['borrowed_at'] ?? item['created_at'])?.toString() ?? '',
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: cream,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.receipt_long_rounded,
+            color: navy,
+            size: 25,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Peminjaman #${item['id']}',
+                  style: const TextStyle(
+                    color: navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  date == null
+                      ? '-'
+                      : '${date.day}/${date.month}/${date.year}',
+                  style: const TextStyle(
+                    color: muted,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 9,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              status,
+              style: const TextStyle(
+                color: navy,
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

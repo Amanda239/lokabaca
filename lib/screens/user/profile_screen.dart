@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../auth/login_screen.dart';
 import 'user_bottom_navigation.dart';
 import 'edit_profile_screen.dart';
-import 'change_password_screen.dart';
 import 'help_screen.dart';
 
 import 'dashboard_screen.dart';

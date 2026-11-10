@@ -1,8 +1,11 @@
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'admin_bottom_navigation.dart';
+
 class DetailPeminjamanScreen extends StatefulWidget {
-  final int borrowingId;
+  final dynamic borrowingId;
 
   const DetailPeminjamanScreen({
     super.key,
@@ -16,19 +19,19 @@ class DetailPeminjamanScreen extends StatefulWidget {
 
 class _DetailPeminjamanScreenState
     extends State<DetailPeminjamanScreen> {
-
   static const Color navy = Color(0xFF2E4057);
   static const Color cream = Color(0xFFF8F4EA);
   static const Color textColor = Color(0xFF304258);
-  static const Color mutedText = Color(0xFF8993A1);
-  static const Color borderColor = Color(0xFF8993A1);
+  static const Color muted = Color(0xFF8993A1);
 
-  final SupabaseClient supabase = Supabase.instance.client;
+  final supabase = Supabase.instance.client;
 
   bool isLoading = true;
   String? errorMessage;
 
   Map<String, dynamic>? borrowing;
+  Map<String, dynamic>? book;
+  Map<String, dynamic>? profile;
 
   @override
   void initState() {
@@ -36,55 +39,74 @@ class _DetailPeminjamanScreenState
     loadBorrowingDetail();
   }
 
-  // ==========================================
-  // LOAD DATA PEMINJAMAN
-  // ==========================================
+  // =====================================================
+  // LOAD DETAIL TRANSAKSI DARI SUPABASE
+  // =====================================================
 
   Future<void> loadBorrowingDetail() async {
-    try {
-      setState(() {
-        isLoading = true;
-        errorMessage = null;
-      });
+    if (!mounted) return;
 
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      // 1. Ambil transaksi peminjaman.
       final response = await supabase
           .from('borrowings')
-          .select('''
-            id,
-            user_id,
-            book_id,
-            borrowed_at,
-            due_date,
-            returned_at,
-            status,
-            created_at,
-            books (
-              id,
-              title,
-              author,
-              category,
-              description,
-              cover_url,
-              stock
-            ),
-            profiles (
-              id,
-              full_name,
-              nis,
-              role,
-              status
-            )
-          ''')
+          .select()
           .eq('id', widget.borrowingId)
-          .single();
+          .maybeSingle();
+
+      if (response == null) {
+        throw Exception('Data peminjaman tidak ditemukan.');
+      }
+
+      final transaction =
+          Map<String, dynamic>.from(response);
+
+      // 2. Ambil data buku berdasarkan book_id.
+      Map<String, dynamic>? bookData;
+
+      if (transaction['book_id'] != null) {
+        final result = await supabase
+            .from('books')
+            .select()
+            .eq('id', transaction['book_id'])
+            .maybeSingle();
+
+        if (result != null) {
+          bookData = Map<String, dynamic>.from(result);
+        }
+      }
+
+      // 3. Ambil data anggota berdasarkan user_id/member_id.
+      final userId = transaction['user_id'] ??
+          transaction['member_id'];
+
+      Map<String, dynamic>? profileData;
+
+      if (userId != null) {
+        final result = await supabase
+            .from('profiles')
+            .select()
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (result != null) {
+          profileData = Map<String, dynamic>.from(result);
+        }
+      }
 
       if (!mounted) return;
 
       setState(() {
-        borrowing = Map<String, dynamic>.from(response);
+        borrowing = transaction;
+        book = bookData;
+        profile = profileData;
         isLoading = false;
       });
-
     } catch (e) {
       if (!mounted) return;
 
@@ -95,9 +117,28 @@ class _DetailPeminjamanScreenState
     }
   }
 
-  // ==========================================
-  // FORMAT TANGGAL
-  // ==========================================
+  // =====================================================
+  // HELPER
+  // =====================================================
+
+  String valueOf(
+    Map<String, dynamic>? data,
+    List<String> keys, {
+    String fallback = '-',
+  }) {
+    if (data == null) return fallback;
+
+    for (final key in keys) {
+      final value = data[key];
+
+      if (value != null &&
+          value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+
+    return fallback;
+  }
 
   String formatDate(dynamic value) {
     if (value == null || value.toString().isEmpty) {
@@ -109,109 +150,106 @@ class _DetailPeminjamanScreenState
     if (date == null) return '-';
 
     const months = [
-      'Januari',
-      'Februari',
-      'Maret',
-      'April',
-      'Mei',
-      'Juni',
-      'Juli',
-      'Agustus',
-      'September',
-      'Oktober',
-      'November',
-      'Desember',
+      'Januari', 'Februari', 'Maret', 'April',
+      'Mei', 'Juni', 'Juli', 'Agustus',
+      'September', 'Oktober', 'November', 'Desember'
     ];
 
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  // ==========================================
-  // STATUS PEMINJAMAN
-  // ==========================================
+  // =====================================================
+  // STATUS
+  // =====================================================
 
-  String getStatusText(
-    String status,
-    dynamic dueDate,
-  ) {
-    final normalized = status.toLowerCase();
+  String get statusText {
+    if (borrowing == null) return '-';
 
-    final due = DateTime.tryParse(
-      dueDate?.toString() ?? '',
-    );
+    final status = (borrowing!['status'] ?? '')
+        .toString()
+        .toLowerCase();
 
-    if (normalized == 'dipinjam' &&
-        due != null &&
-        due.isBefore(DateTime.now())) {
-      return 'Terlambat';
+    if (['dipinjam', 'borrowed', 'aktif'].contains(status)) {
+      final dueDate = DateTime.tryParse(
+        (borrowing!['due_date'] ??
+                borrowing!['tanggal_jatuh_tempo'] ??
+                '')
+            .toString(),
+      );
+
+      if (dueDate != null) {
+        final today = DateTime.now();
+
+        final due = DateTime(
+          dueDate.year,
+          dueDate.month,
+          dueDate.day,
+        );
+
+        final now = DateTime(
+          today.year,
+          today.month,
+          today.day,
+        );
+
+        if (due.isBefore(now)) {
+          return 'Terlambat';
+        }
+      }
+
+      return 'Dipinjam';
     }
 
-    switch (normalized) {
-      case 'dipinjam':
-        return 'Dipinjam';
-
-      case 'borrowed':
-        return 'Dipinjam';
-
-      case 'dikembalikan':
-        return 'Dikembalikan';
-
-      case 'returned':
-        return 'Dikembalikan';
-
-      case 'terlambat':
-        return 'Terlambat';
-
-      default:
-        return status;
+    if (['dikembalikan', 'returned', 'selesai'].contains(status)) {
+      return 'Dikembalikan';
     }
+
+    if (status == 'terlambat') return 'Terlambat';
+
+    return status.isEmpty ? 'Tidak diketahui' : status;
   }
 
-  Color getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'dikembalikan':
-      case 'returned':
-        return const Color(0xFFB9E4CD);
-
-      case 'terlambat':
+  Color get statusColor {
+    switch (statusText) {
+      case 'Terlambat':
         return const Color(0xFFFFD6D6);
-
+      case 'Dikembalikan':
+        return const Color(0xFFB9E4CD);
       default:
         return const Color(0xFFFFD36A);
     }
   }
 
-  Color getStatusTextColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'dikembalikan':
-      case 'returned':
-        return const Color(0xFF315F46);
-
-      case 'terlambat':
+  Color get statusTextColor {
+    switch (statusText) {
+      case 'Terlambat':
         return const Color(0xFFB83232);
-
+      case 'Dikembalikan':
+        return const Color(0xFF315F46);
       default:
         return const Color(0xFF76551A);
     }
   }
 
-  // ==========================================
+  // =====================================================
   // BUILD
-  // ==========================================
+  // =====================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
       body: SafeArea(
         child: Column(
           children: [
             _buildHeader(),
-
             Expanded(
               child: isLoading
-                  ? _buildLoading()
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: navy,
+                      ),
+                    )
                   : errorMessage != null
                       ? _buildError()
                       : borrowing == null
@@ -221,20 +259,20 @@ class _DetailPeminjamanScreenState
           ],
         ),
       ),
-
-      bottomNavigationBar: _buildBottomNavigation(),
+      bottomNavigationBar: AdminBottomNavigation(
+        currentIndex: 3,
+        onTap: _handleBottomNavigation,
+      ),
     );
   }
 
-  // ==========================================
+  // =====================================================
   // HEADER
-  // ==========================================
+  // =====================================================
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        16, 12, 16, 12,
-      ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         children: [
           IconButton(
@@ -245,7 +283,6 @@ class _DetailPeminjamanScreenState
               size: 20,
             ),
           ),
-
           const Expanded(
             child: Text(
               'Detail Peminjaman',
@@ -257,137 +294,111 @@ class _DetailPeminjamanScreenState
               ),
             ),
           ),
-
-          const SizedBox(width: 48),
+          IconButton(
+            onPressed: loadBorrowingDetail,
+            icon: const Icon(
+              Icons.refresh_rounded,
+              color: navy,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  // ==========================================
-  // LOADING
-  // ==========================================
-
-  Widget _buildLoading() {
-    return const Center(
-      child: CircularProgressIndicator(
-        color: navy,
-      ),
-    );
-  }
-
-  // ==========================================
-  // ERROR
-  // ==========================================
-
-  Widget _buildError() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.cloud_off_rounded,
-              color: navy,
-              size: 45,
-            ),
-
-            const SizedBox(height: 12),
-
-            const Text(
-              'Gagal Memuat Detail',
-              style: TextStyle(
-                color: navy,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              errorMessage ?? 'Terjadi kesalahan',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: mutedText,
-                fontSize: 11,
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            ElevatedButton(
-              onPressed: loadBorrowingDetail,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: navy,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Coba Lagi'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ==========================================
-  // EMPTY
-  // ==========================================
-
-  Widget _buildEmpty() {
-    return const Center(
-      child: Text(
-        'Data peminjaman tidak ditemukan',
-        style: TextStyle(
-          color: mutedText,
-          fontSize: 13,
-        ),
-      ),
-    );
-  }
-
-  // ==========================================
+  // =====================================================
   // CONTENT
-  // ==========================================
+  // =====================================================
 
   Widget _buildContent() {
-    final book = borrowing!['books']
-        as Map<String, dynamic>? ?? {};
-
-    final profile = borrowing!['profiles']
-        as Map<String, dynamic>? ?? {};
-
-    final status =
-        borrowing!['status']?.toString() ?? '-';
-
-    final statusText = getStatusText(
-      status,
-      borrowing!['due_date'],
+    final title = valueOf(
+      book,
+      ['title', 'judul'],
+      fallback: 'Buku tidak ditemukan',
     );
+
+    final author = valueOf(
+      book,
+      ['author', 'penulis'],
+    );
+
+    final category = valueOf(
+      book,
+      ['category', 'kategori'],
+    );
+
+    final year = valueOf(
+      book,
+      ['published_year', 'year', 'tahun_terbit'],
+    );
+
+    final pages = valueOf(
+      book,
+      ['pages', 'page_count', 'jumlah_halaman'],
+    );
+
+    final stock = valueOf(
+      book,
+      ['stock', 'stok'],
+    );
+
+    final cover = valueOf(
+      book,
+      ['cover_url', 'cover', 'image_url'],
+      fallback: '',
+    );
+
+    final memberName = valueOf(
+      profile,
+      ['full_name', 'name', 'nama_lengkap', 'username'],
+      fallback: 'Anggota tidak ditemukan',
+    );
+
+    final nis = valueOf(
+      profile,
+      ['nisn', 'nis', 'student_id', 'nomor_induk'],
+    );
+
+    final kelas = valueOf(
+      profile,
+      ['kelas', 'class_name'],
+    );
+
+    final borrowedDate = borrowing!['borrowed_at'] ??
+        borrowing!['borrow_date'] ??
+        borrowing!['tanggal_pinjam'] ??
+        borrowing!['created_at'];
+
+    final dueDate = borrowing!['due_date'] ??
+        borrowing!['tanggal_jatuh_tempo'];
+
+    final returnedDate = borrowing!['returned_at'] ??
+        borrowing!['return_date'] ??
+        borrowing!['tanggal_kembali'];
 
     return RefreshIndicator(
       color: navy,
       onRefresh: loadBorrowingDetail,
-
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(
-          16, 10, 16, 25,
-        ),
-
+        padding: const EdgeInsets.fromLTRB(17, 9, 17, 25),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             // INFORMASI BUKU
-
-            _buildBookCard(book),
+            _buildBookCard(
+              cover: cover,
+              title: title,
+              author: author,
+              category: category,
+              year: year,
+              pages: pages,
+              stock: stock,
+            ),
 
             const SizedBox(height: 27),
 
             // INFORMASI ANGGOTA
-
             const Padding(
               padding: EdgeInsets.only(left: 7),
               child: Text(
@@ -402,12 +413,15 @@ class _DetailPeminjamanScreenState
 
             const SizedBox(height: 10),
 
-            _buildMemberCard(profile),
+            _buildMemberCard(
+              name: memberName,
+              nis: nis,
+              kelas: kelas,
+            ),
 
-            const SizedBox(height: 17),
+            const SizedBox(height: 19),
 
             // INFORMASI PEMINJAMAN
-
             const Padding(
               padding: EdgeInsets.only(left: 7),
               child: Text(
@@ -422,61 +436,56 @@ class _DetailPeminjamanScreenState
 
             const SizedBox(height: 10),
 
-            _buildBorrowingInfo(statusText),
-
+            _buildBorrowingInfo(
+              borrowedDate: borrowedDate,
+              dueDate: dueDate,
+              returnedDate: returnedDate,
+            ),
           ],
         ),
       ),
     );
   }
 
-  // ==========================================
+  // =====================================================
   // BOOK CARD
-  // ==========================================
+  // =====================================================
 
-  Widget _buildBookCard(
-    Map<String, dynamic> book,
-  ) {
-    final title =
-        book['title']?.toString() ?? 'Buku';
-
-    final author =
-        book['author']?.toString() ?? '-';
-
-    final category =
-        book['category']?.toString() ?? '-';
-
-    final coverUrl =
-        book['cover_url']?.toString();
-
-    final stock =
-        book['stock']?.toString() ?? '0';
+  Widget _buildBookCard({
+    required String cover,
+    required String title,
+    required String author,
+    required String category,
+    required String year,
+    required String pages,
+    required String stock,
+  }) {
+    final additionalInfo = [
+      category,
+      if (year != '-') year,
+      if (pages != '-') '$pages hlm',
+    ].where((e) => e != '-').join(' · ');
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(9),
-
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(
-          color: navy.withOpacity(0.65),
+          color: navy.withOpacity(0.7),
         ),
         borderRadius: BorderRadius.circular(10),
       ),
-
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-
-          _buildBookCover(coverUrl),
-
-          const SizedBox(width: 12),
+          _buildBookCover(cover),
+          const SizedBox(width: 11),
 
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Text(
                   title,
                   maxLines: 2,
@@ -484,33 +493,28 @@ class _DetailPeminjamanScreenState
                   style: const TextStyle(
                     color: textColor,
                     fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     height: 1.3,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   author,
                   style: const TextStyle(
-                    color: mutedText,
+                    color: muted,
                     fontSize: 9,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
-                Text(
-                  category,
-                  style: const TextStyle(
-                    color: mutedText,
-                    fontSize: 9,
+                if (additionalInfo.isNotEmpty)
+                  Text(
+                    additionalInfo,
+                    style: const TextStyle(
+                      color: muted,
+                      fontSize: 9,
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 12),
-
+                const SizedBox(height: 16),
                 Text(
                   'Stok: $stock',
                   style: const TextStyle(
@@ -533,30 +537,20 @@ class _DetailPeminjamanScreenState
     );
   }
 
-  // ==========================================
-  // BOOK COVER
-  // ==========================================
-
-  Widget _buildBookCover(String? url) {
+  Widget _buildBookCover(String url) {
     return Container(
-      width: 65,
-      height: 95,
-
+      width: 68,
+      height: 102,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: cream,
         borderRadius: BorderRadius.circular(8),
       ),
-
-      clipBehavior: Clip.antiAlias,
-
-      child: url != null && url.isNotEmpty
+      child: url.isNotEmpty
           ? Image.network(
               url,
               fit: BoxFit.cover,
-
-              errorBuilder: (context, error, stackTrace) {
-                return _coverPlaceholder();
-              },
+              errorBuilder: (_, __, ___) => _coverPlaceholder(),
             )
           : _coverPlaceholder(),
     );
@@ -572,82 +566,80 @@ class _DetailPeminjamanScreenState
     );
   }
 
-  // ==========================================
+  // =====================================================
   // MEMBER CARD
-  // ==========================================
+  // =====================================================
 
-  Widget _buildMemberCard(
-    Map<String, dynamic> profile,
-  ) {
-    final name =
-        profile['full_name']?.toString() ?? 'Anggota';
-
-    final nis =
-        profile['nis']?.toString() ?? '-';
+  Widget _buildMemberCard({
+    required String name,
+    required String nis,
+    required String kelas,
+  }) {
+    final avatarUrl = valueOf(
+      profile,
+      ['avatar_url', 'photo_url', 'profile_image'],
+      fallback: '',
+    );
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(10),
-
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(
-          color: navy.withOpacity(0.65),
+          color: navy.withOpacity(0.7),
         ),
         borderRadius: BorderRadius.circular(10),
       ),
-
       child: Row(
         children: [
-
           Container(
-            width: 65,
-            height: 65,
-
+            width: 68,
+            height: 68,
+            clipBehavior: Clip.antiAlias,
             decoration: const BoxDecoration(
               color: navy,
               shape: BoxShape.circle,
             ),
-
-            child: const Icon(
-              Icons.person_rounded,
-              color: Colors.white,
-              size: 55,
-            ),
+            child: avatarUrl.isNotEmpty
+                ? Image.network(
+                    avatarUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        _memberPlaceholder(),
+                  )
+                : _memberPlaceholder(),
           ),
 
-          const SizedBox(width: 12),
+          const SizedBox(width: 13),
 
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Text(
                   name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: textColor,
                     fontSize: 11,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-
-                const SizedBox(height: 7),
-
+                const SizedBox(height: 6),
                 Text(
                   'NISN: $nis',
                   style: const TextStyle(
-                    color: mutedText,
+                    color: muted,
                     fontSize: 10,
                   ),
                 ),
-
-                const SizedBox(height: 5),
-
-                const Text(
-                  'Anggota LokaBaca',
-                  style: TextStyle(
-                    color: mutedText,
+                const SizedBox(height: 4),
+                Text(
+                  'KELAS: $kelas',
+                  style: const TextStyle(
+                    color: muted,
                     fontSize: 10,
                   ),
                 ),
@@ -659,97 +651,133 @@ class _DetailPeminjamanScreenState
     );
   }
 
-  // ==========================================
+  Widget _memberPlaceholder() {
+    return const Icon(
+      Icons.person_rounded,
+      color: Colors.white,
+      size: 48,
+    );
+  }
+
+  // =====================================================
   // BORROWING INFORMATION
-  // ==========================================
+  // =====================================================
 
-  Widget _buildBorrowingInfo(
-    String statusText,
-  ) {
-    final status =
-        borrowing!['status']?.toString() ?? '-';
-
+  Widget _buildBorrowingInfo({
+    required dynamic borrowedDate,
+    required dynamic dueDate,
+    required dynamic returnedDate,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
         horizontal: 15,
         vertical: 17,
       ),
-
       decoration: BoxDecoration(
         color: cream,
         border: Border.all(
-          color: borderColor.withOpacity(0.7),
+          color: const Color(0xFFB8B9B7),
         ),
         borderRadius: BorderRadius.circular(10),
       ),
-
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          _buildInfoRow(
+          _infoRow(
             icon: Icons.calendar_today_rounded,
             title: 'Tanggal pinjaman',
-            value: formatDate(
-              borrowing!['borrowed_at'],
-            ),
+            value: formatDate(borrowedDate),
           ),
 
           const SizedBox(height: 19),
 
-          _buildInfoRow(
+          _infoRow(
             icon: Icons.event_note_rounded,
             title: 'Tanggal jatuh tempo',
-            value: formatDate(
-              borrowing!['due_date'],
-            ),
+            value: formatDate(dueDate),
           ),
 
           const SizedBox(height: 19),
 
-          _buildInfoRow(
+          _infoRow(
             icon: Icons.assignment_return_rounded,
             title: 'Tanggal kembali',
-            value: formatDate(
-              borrowing!['returned_at'],
-            ),
+            value: formatDate(returnedDate),
           ),
 
           const SizedBox(height: 19),
 
-          _buildInfoRow(
-            icon: Icons.history_rounded,
-            title: 'Status',
-            value: statusText,
-            isStatus: true,
-            originalStatus: status,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                width: 45,
+                child: Icon(
+                  Icons.alarm_rounded,
+                  color: navy,
+                  size: 31,
+                ),
+              ),
+
+              const SizedBox(width: 10),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Status',
+                      style: TextStyle(
+                        color: navy,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        statusText,
+                        style: TextStyle(
+                          color: statusTextColor,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // ==========================================
-  // INFORMATION ROW
-  // ==========================================
-
-  Widget _buildInfoRow({
+  Widget _infoRow({
     required IconData icon,
     required String title,
     required String value,
-    bool isStatus = false,
-    String originalStatus = '',
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-
         SizedBox(
           width: 45,
           child: Icon(
             icon,
             color: navy,
-            size: 29,
+            size: 30,
           ),
         ),
 
@@ -759,7 +787,6 @@ class _DetailPeminjamanScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               Text(
                 title,
                 style: const TextStyle(
@@ -768,42 +795,14 @@ class _DetailPeminjamanScreenState
                   fontWeight: FontWeight.w800,
                 ),
               ),
-
               const SizedBox(height: 4),
-
-              if (isStatus)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-
-                  decoration: BoxDecoration(
-                    color: getStatusColor(
-                      originalStatus,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-
-                  child: Text(
-                    value,
-                    style: TextStyle(
-                      color: getStatusTextColor(
-                        originalStatus,
-                      ),
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                )
-              else
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: textColor,
-                    fontSize: 10,
-                  ),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: textColor,
+                  fontSize: 10,
                 ),
+              ),
             ],
           ),
         ),
@@ -811,95 +810,83 @@ class _DetailPeminjamanScreenState
     );
   }
 
-  // ==========================================
-  // BOTTOM NAVIGATION
-  // ==========================================
+  // =====================================================
+  // LOADING / ERROR / EMPTY
+  // =====================================================
 
-  Widget _buildBottomNavigation() {
-    final items = [
-      {
-        'icon': Icons.home_outlined,
-        'label': 'Beranda',
-      },
-      {
-        'icon': Icons.menu_book_rounded,
-        'label': 'Buku',
-      },
-      {
-        'icon': Icons.person_add_alt_1_rounded,
-        'label': 'Anggota',
-      },
-      {
-        'icon': Icons.auto_stories_rounded,
-        'label': 'Peminjaman',
-      },
-      {
-        'icon': Icons.person_outline_rounded,
-        'label': 'Akun',
-      },
-    ];
-
-    return Container(
-      height: 58,
-
-      decoration: const BoxDecoration(
-        color: cream,
-        border: Border(
-          top: BorderSide(
-            color: Color(0xFFE5E0D5),
-          ),
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_rounded,
+              color: navy,
+              size: 45,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Gagal Memuat Detail',
+              style: TextStyle(
+                color: navy,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage ?? 'Terjadi kesalahan',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: muted,
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(height: 15),
+            ElevatedButton(
+              onPressed: loadBorrowingDetail,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Coba Lagi'),
+            ),
+          ],
         ),
       ),
+    );
+  }
 
-      child: SafeArea(
-        top: false,
+  Widget _buildEmpty() {
+    return const Center(
+      child: Text(
+        'Data peminjaman tidak ditemukan',
+        style: TextStyle(
+          color: muted,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
 
-        child: Row(
-          children: List.generate(
-            items.length,
-            (index) {
-              final item = items[index];
+  // =====================================================
+  // BOTTOM NAVIGATION
+  // =====================================================
 
-              return Expanded(
-                child: InkWell(
-                  onTap: () {
-                    if (index != 3) {
-                      Navigator.pop(context);
-                    }
-                  },
+  void _handleBottomNavigation(int index) {
+    if (index == 3) return;
 
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+    if (index == 0) {
+      Navigator.popUntil(context, (route) => route.isFirst);
+      return;
+    }
 
-                      Icon(
-                        item['icon'] as IconData,
-                        size: 20,
-                        color: index == 3
-                            ? navy
-                            : const Color(0xFF69624F),
-                      ),
-
-                      const SizedBox(height: 3),
-
-                      Text(
-                        item['label'] as String,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: index == 3
-                              ? FontWeight.bold
-                              : FontWeight.w500,
-                          color: index == 3
-                              ? navy
-                              : const Color(0xFF69624F),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Silakan pilih menu melalui navigasi utama.',
         ),
       ),
     );
