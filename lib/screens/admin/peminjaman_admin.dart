@@ -1,9 +1,14 @@
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'admin_bottom_navigation.dart';
 import 'detail_peminjaman.dart';
+
+// Halaman untuk navigasi bottom navigation
+import 'dashboard_admin.dart';
+import 'kelola_buku.dart';
+import 'kelola_anggota.dart';
+import 'profile_admin.dart';
 
 class PeminjamanAdminScreen extends StatefulWidget {
   const PeminjamanAdminScreen({super.key});
@@ -276,15 +281,37 @@ class _PeminjamanAdminScreenState
   // =====================================================
 
   void handleBottomNavigation(int index) {
+    // Sudah berada di halaman Peminjaman
     if (index == 3) return;
 
-    if (index == 0) {
-      Navigator.popUntil(context, (route) => route.isFirst);
-      return;
+    late final Widget page;
+
+    switch (index) {
+      case 0:
+        page = const DashboardAdmin();
+        break;
+
+      case 1:
+        page = const KelolaBukuScreen();
+        break;
+
+      case 2:
+        page = const KelolaAnggotaPage();
+        break;
+
+      case 4:
+        page = const AdminProfileScreen();
+        break;
+
+      default:
+        return;
     }
 
-    showMessage(
-      'Silakan pilih menu melalui navigasi utama.',
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => page,
+      ),
     );
   }
 
@@ -375,12 +402,10 @@ class _PeminjamanAdminScreenState
       children: [
         const SizedBox(height: 10),
 
-        // FILTER
         _buildFilters(),
 
         const SizedBox(height: 18),
 
-        // TOTAL PEMINJAMAN
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18),
           child: Row(
@@ -407,14 +432,14 @@ class _PeminjamanAdminScreenState
 
         const SizedBox(height: 12),
 
-        // LIST PEMINJAMAN
         Expanded(
           child: RefreshIndicator(
             color: navy,
             onRefresh: loadBorrowings,
             child: data.isEmpty
                 ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
+                    physics:
+                        const AlwaysScrollableScrollPhysics(),
                     children: [
                       const SizedBox(height: 120),
 
@@ -440,9 +465,13 @@ class _PeminjamanAdminScreenState
                     ],
                   )
                 : ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
+                    physics:
+                        const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(
-                      14, 0, 14, 20,
+                      14,
+                      0,
+                      14,
+                      20,
                     ),
                     itemCount: data.length,
                     itemBuilder: (context, index) {
@@ -456,7 +485,7 @@ class _PeminjamanAdminScreenState
   }
 
   // =====================================================
-  // FILTER PEMINJAMAN - DESAIN BARU
+  // FILTER PEMINJAMAN
   // =====================================================
 
   Widget _buildFilters() {
@@ -516,7 +545,8 @@ class _PeminjamanAdminScreenState
                     const SizedBox(width: 7),
 
                     AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                      duration:
+                          const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 6,
                         vertical: 2,
@@ -556,7 +586,8 @@ class _PeminjamanAdminScreenState
     Map<String, dynamic> item,
   ) {
     final book = item['_book'] as Map<String, dynamic>?;
-    final profile = item['_profile'] as Map<String, dynamic>?;
+    final profile =
+        item['_profile'] as Map<String, dynamic>?;
 
     final title = valueOf(
       book,
@@ -640,7 +671,8 @@ class _PeminjamanAdminScreenState
 
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
@@ -761,7 +793,8 @@ class _PeminjamanAdminScreenState
           ? Image.network(
               url,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _coverFallback(),
+              errorBuilder: (_, __, ___) =>
+                  _coverFallback(),
             )
           : _coverFallback(),
     );

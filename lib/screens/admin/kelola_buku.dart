@@ -6,8 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'admin_bottom_navigation.dart';
+import 'dashboard_admin.dart';
 import 'kelola_anggota.dart';
 import 'peminjaman_admin.dart';
+import 'profile_admin.dart';
 
 class KelolaBukuScreen extends StatefulWidget {
   const KelolaBukuScreen({super.key});
@@ -56,7 +58,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
     );
   }
 
-  // MEMBACA DATA LANGSUNG DARI SUPABASE
   Future<void> loadBooks() async {
     if (!mounted) return;
 
@@ -110,7 +111,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
     }).toList();
   }
 
-  // BUKA FORM TAMBAH / EDIT
   Future<void> openForm({Map<String, dynamic>? book}) async {
     final saved = await Navigator.push<bool>(
       context,
@@ -130,7 +130,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
     );
   }
 
-  // HAPUS BUKU
   Future<void> deleteBook(Map<String, dynamic> book) async {
     final yes = await showDialog<bool>(
       context: context,
@@ -186,43 +185,36 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
 
   // BOTTOM NAVIGATION
   Future<void> onBottomTap(int index) async {
-    if (index == 1) {
-      setState(() => selectedIndex = 1);
-      return;
-    }
+    if (index == selectedIndex) return;
 
-    if (index == 0) {
-      Navigator.pop(context);
-      return;
-    }
+    if (index < 0 || index > 4) return;
 
     Widget? page;
 
-    if (index == 2) {
-      page = const KelolaAnggotaPage();
+    switch (index) {
+      case 0:
+        page = const DashboardAdmin();
+        break;
+      case 1:
+        setState(() => selectedIndex = 1);
+        return;
+      case 2:
+        page = const KelolaAnggotaPage();
+        break;
+      case 3:
+        page = const PeminjamanAdminScreen();
+        break;
+      case 4:
+        page = const AdminProfileScreen();
+        break;
     }
 
-    if (index == 3) {
-      page = const PeminjamanAdminScreen();
-    }
+    if (page == null) return;
 
-    if (page == null) {
-      message('Halaman akun belum dihubungkan.');
-      return;
-    }
-
-    setState(() => selectedIndex = index);
-
-    await Navigator.push(
+    await Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => page!),
     );
-
-    if (!mounted) return;
-
-    setState(() => selectedIndex = 1);
-
-    await loadBooks();
   }
 
   @override
@@ -234,7 +226,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
           children: [
             _header(),
             _search(),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
               child: Row(
@@ -265,7 +256,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
                 ],
               ),
             ),
-
             Expanded(child: _bookBody()),
           ],
         ),
@@ -290,7 +280,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
               size: 19,
             ),
           ),
-
           const Expanded(
             child: Text(
               'Kelola Buku',
@@ -302,7 +291,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
               ),
             ),
           ),
-
           Material(
             color: navy,
             shape: const CircleBorder(),
@@ -468,8 +456,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 2, 20, 22),
         itemCount: visibleBooks.length,
-        separatorBuilder: (_, __) =>
-            const SizedBox(height: 12),
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           return _bookCard(visibleBooks[index]);
         },
@@ -482,9 +469,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(
-          color: navy.withOpacity(.28),
-        ),
+        border: Border.all(color: navy.withOpacity(.28)),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -496,15 +481,12 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
       ),
       child: Row(
         children: [
-          // COVER OTOMATIS MEMBACA ASSET ATAU URL
           BookCover(
             cover: book['cover_url'],
             width: 62,
             height: 88,
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -519,12 +501,9 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
-                  (book['author'] ?? 'Penulis tidak diketahui')
-                      .toString(),
+                  (book['author'] ?? 'Penulis tidak diketahui').toString(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -532,20 +511,15 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
                     fontSize: 10,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
-                  (book['category'] ?? 'Tanpa kategori')
-                      .toString(),
+                  (book['category'] ?? 'Tanpa kategori').toString(),
                   style: const TextStyle(
                     color: navy,
                     fontSize: 10,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
                 Text(
                   'Stok: ${book['stock'] ?? 0}',
                   style: const TextStyle(
@@ -557,7 +531,6 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
               ],
             ),
           ),
-
           PopupMenuButton<String>(
             icon: const Icon(
               Icons.more_vert_rounded,
@@ -566,9 +539,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
             onSelected: (value) {
               if (value == 'edit') {
                 openForm(book: book);
-              }
-
-              if (value == 'delete') {
+              } else if (value == 'delete') {
                 deleteBook(book);
               }
             },
@@ -577,11 +548,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
                 value: 'edit',
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.edit_outlined,
-                      color: navy,
-                      size: 18,
-                    ),
+                    Icon(Icons.edit_outlined, color: navy, size: 18),
                     SizedBox(width: 9),
                     Text('Edit Buku'),
                   ],
@@ -609,9 +576,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
   }
 }
 
-// ============================================================
 // FORM TAMBAH DAN EDIT BUKU
-// ============================================================
 
 class FormBukuScreen extends StatefulWidget {
   final Map<String, dynamic>? book;
@@ -672,22 +637,14 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
     final book = widget.book;
 
     if (book != null) {
-      titleController.text =
-          (book['title'] ?? '').toString();
-
-      authorController.text =
-          (book['author'] ?? '').toString();
-
-      stockController.text =
-          (book['stock'] ?? 0).toString();
-
+      titleController.text = (book['title'] ?? '').toString();
+      authorController.text = (book['author'] ?? '').toString();
+      stockController.text = (book['stock'] ?? 0).toString();
       descriptionController.text =
           (book['description'] ?? '').toString();
 
       category = book['category']?.toString();
-
-      existingCover =
-          book['cover_url']?.toString().trim();
+      existingCover = book['cover_url']?.toString().trim();
 
       if (category != null &&
           category!.isNotEmpty &&
@@ -718,7 +675,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
     );
   }
 
-  // PILIH COVER
   Future<void> chooseCover() async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
@@ -742,9 +698,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               const Text(
                 'Pilih Cover Buku',
                 style: TextStyle(
@@ -753,7 +707,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-
               ListTile(
                 leading: const Icon(
                   Icons.photo_library_outlined,
@@ -761,13 +714,9 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                 ),
                 title: const Text('Pilih dari Galeri'),
                 onTap: () {
-                  Navigator.pop(
-                    sheetContext,
-                    ImageSource.gallery,
-                  );
+                  Navigator.pop(sheetContext, ImageSource.gallery);
                 },
               ),
-
               ListTile(
                 leading: const Icon(
                   Icons.camera_alt_outlined,
@@ -775,10 +724,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                 ),
                 title: const Text('Ambil Foto'),
                 onTap: () {
-                  Navigator.pop(
-                    sheetContext,
-                    ImageSource.camera,
-                  );
+                  Navigator.pop(sheetContext, ImageSource.camera);
                 },
               ),
             ],
@@ -787,7 +733,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
       ),
     );
 
-    if (source == null) return;
+    if (source == null || !mounted) return;
 
     try {
       final file = await picker.pickImage(
@@ -826,10 +772,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
     });
   }
 
-  // UPLOAD COVER BARU KE SUPABASE STORAGE
   Future<String?> _uploadCover() async {
-    // Kalau tidak memilih cover baru,
-    // pertahankan cover lama dari database.
     if (pickedFile == null || pickedBytes == null) {
       return coverRemoved ? null : existingCover;
     }
@@ -838,21 +781,14 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
         ? pickedFile!.name.split('.').last.toLowerCase()
         : 'jpg';
 
-    final ext = [
-      'jpg',
-      'jpeg',
-      'png',
-      'webp',
-    ].contains(originalExt)
+    final ext = ['jpg', 'jpeg', 'png', 'webp'].contains(originalExt)
         ? originalExt
         : 'jpg';
 
     final path =
         'covers/${DateTime.now().microsecondsSinceEpoch}.$ext';
 
-    await supabase.storage
-        .from('book-covers')
-        .uploadBinary(
+    await supabase.storage.from('book-covers').uploadBinary(
       path,
       pickedBytes!,
       fileOptions: FileOptions(
@@ -861,9 +797,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
       ),
     );
 
-    return supabase.storage
-        .from('book-covers')
-        .getPublicUrl(path);
+    return supabase.storage.from('book-covers').getPublicUrl(path);
   }
 
   String _mimeType(String ext) {
@@ -877,7 +811,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
     }
   }
 
-  // SIMPAN KE TABEL BOOKS
   Future<void> save() async {
     if (saving) return;
 
@@ -914,9 +847,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
             .from('books')
             .update(payload)
             .eq('id', widget.book!['id'])
-            .select(
-              'id,title,author,category,description,cover_url,rating,stock,created_at',
-            )
+            .select('id')
             .maybeSingle();
 
         if (updated == null) {
@@ -925,11 +856,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
           );
         }
       } else {
-        await supabase
-            .from('books')
-            .insert(payload)
-            .select('id')
-            .single();
+        await supabase.from('books').insert(payload);
       }
 
       if (!mounted) return;
@@ -939,7 +866,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
       if (!mounted) return;
 
       setState(() => saving = false);
-
       message('Gagal menyimpan buku: $e');
     }
   }
@@ -954,17 +880,11 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
           child: Column(
             children: [
               _formHeader(),
-
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     return SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(
-                        20,
-                        12,
-                        20,
-                        26,
-                      ),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 26),
                       child: ConstrainedBox(
                         constraints: BoxConstraints(
                           minHeight: constraints.maxHeight - 38,
@@ -973,45 +893,32 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _coverArea(),
-
                             const SizedBox(height: 18),
-
                             _label('Judul Buku *'),
-
                             _input(
                               controller: titleController,
                               hint: 'Masukkan judul buku',
                               validator: _required,
                             ),
-
                             const SizedBox(height: 12),
-
                             _label('Penulis *'),
-
                             _input(
                               controller: authorController,
                               hint: 'Masukkan nama penulis',
                               validator: _required,
                             ),
-
                             const SizedBox(height: 12),
-
                             _label('Kategori *'),
-
                             _categoryField(),
-
                             const SizedBox(height: 12),
-
                             _label('Stok *'),
-
                             _input(
                               controller: stockController,
                               hint: 'Masukkan stok',
                               keyboardType: TextInputType.number,
                               validator: (value) {
-                                final number = int.tryParse(
-                                  (value ?? '').trim(),
-                                );
+                                final number =
+                                    int.tryParse((value ?? '').trim());
 
                                 if (number == null) {
                                   return 'Masukkan stok berupa angka.';
@@ -1024,20 +931,15 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                                 return null;
                               },
                             ),
-
                             const SizedBox(height: 12),
-
                             _label('Deskripsi *'),
-
                             _input(
                               controller: descriptionController,
                               hint: 'Masukkan deskripsi buku',
                               maxLines: 3,
                               validator: _required,
                             ),
-
                             const SizedBox(height: 24),
-
                             _actions(),
                           ],
                         ),
@@ -1059,16 +961,13 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
       child: Row(
         children: [
           IconButton(
-            onPressed: saving
-                ? null
-                : () => Navigator.pop(context),
+            onPressed: saving ? null : () => Navigator.pop(context),
             icon: const Icon(
               Icons.arrow_back_ios_new_rounded,
               color: navy,
               size: 20,
             ),
           ),
-
           Expanded(
             child: Text(
               isEdit ? 'Edit Buku' : 'Tambah Buku',
@@ -1080,14 +979,12 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
               ),
             ),
           ),
-
           const SizedBox(width: 48),
         ],
       ),
     );
   }
 
-  // AREA COVER
   Widget _coverArea() {
     final hasPicked = pickedBytes != null;
 
@@ -1118,18 +1015,13 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                       height: 104,
                       fit: BoxFit.cover,
                     )
-                  // PERBAIKAN:
-                  // Gunakan BookCover, bukan Image.network langsung.
-                  // Dengan begitu asset lokal dan URL sama-sama terbaca.
                   : BookCover(
                       cover: existingCover,
                       width: 68,
                       height: 104,
                     ),
             ),
-
             const SizedBox(width: 22),
-
             Expanded(
               child: InkWell(
                 onTap: saving ? null : chooseCover,
@@ -1156,6 +1048,13 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                     ],
                   ),
                 ),
+              ),
+            ),
+            IconButton(
+              onPressed: saving ? null : removeCover,
+              icon: const Icon(
+                Icons.delete_outline,
+                color: Colors.red,
               ),
             ),
           ],
@@ -1189,7 +1088,6 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                         fit: BoxFit.contain,
                       ),
                     ),
-
                     Positioned(
                       top: 5,
                       right: 5,
@@ -1199,9 +1097,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.red,
                         ),
-                        icon: const Icon(
-                          Icons.delete_outline,
-                        ),
+                        icon: const Icon(Icons.delete_outline),
                       ),
                     ),
                   ],
@@ -1248,10 +1144,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
 
   Widget _label(String value) {
     return Padding(
-      padding: const EdgeInsets.only(
-        left: 5,
-        bottom: 6,
-      ),
+      padding: const EdgeInsets.only(left: 5, bottom: 6),
       child: Text(
         value,
         style: const TextStyle(
@@ -1276,16 +1169,10 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
       keyboardType: keyboardType,
       maxLines: maxLines,
       enabled: !saving,
-      style: const TextStyle(
-        color: navy,
-        fontSize: 12,
-      ),
+      style: const TextStyle(color: navy, fontSize: 12),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(
-          color: muted,
-          fontSize: 11,
-        ),
+        hintStyle: const TextStyle(color: muted, fontSize: 11),
         filled: true,
         fillColor: cream,
         contentPadding: const EdgeInsets.symmetric(
@@ -1299,22 +1186,15 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(
-            color: navy,
-            width: 1.2,
-          ),
+          borderSide: const BorderSide(color: navy, width: 1.2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(
-            color: Colors.redAccent,
-          ),
+          borderSide: const BorderSide(color: Colors.redAccent),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(
-            color: Colors.redAccent,
-          ),
+          borderSide: const BorderSide(color: Colors.redAccent),
         ),
       ),
     );
@@ -1340,10 +1220,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
       },
       decoration: InputDecoration(
         hintText: 'Pilih Kategori',
-        hintStyle: const TextStyle(
-          color: muted,
-          fontSize: 11,
-        ),
+        hintStyle: const TextStyle(color: muted, fontSize: 11),
         filled: true,
         fillColor: cream,
         contentPadding: const EdgeInsets.symmetric(
@@ -1357,10 +1234,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(
-            color: navy,
-            width: 1.2,
-          ),
+          borderSide: const BorderSide(color: navy, width: 1.2),
         ),
       ),
       icon: const Icon(
@@ -1374,10 +1248,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
           value: item,
           child: Text(
             item,
-            style: const TextStyle(
-              color: navy,
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: navy, fontSize: 12),
           ),
         );
       }).toList(),
@@ -1416,9 +1287,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
           child: SizedBox(
             height: 45,
             child: OutlinedButton(
-              onPressed: saving
-                  ? null
-                  : () => Navigator.pop(context),
+              onPressed: saving ? null : () => Navigator.pop(context),
               style: OutlinedButton.styleFrom(
                 foregroundColor: navy,
                 side: const BorderSide(color: navy),
@@ -1436,9 +1305,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
             ),
           ),
         ),
-
         const SizedBox(width: 14),
-
         Expanded(
           child: SizedBox(
             height: 45,
@@ -1482,9 +1349,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
   }
 }
 
-// ============================================================
 // DASHED BORDER
-// ============================================================
 
 class _DashedBorderPainter extends CustomPainter {
   final Color color;
@@ -1518,28 +1383,20 @@ class _DashedBorderPainter extends CustomPainter {
             .clamp(0.0, metric.length)
             .toDouble();
 
-        canvas.drawPath(
-          metric.extractPath(distance, end),
-          paint,
-        );
-
+        canvas.drawPath(metric.extractPath(distance, end), paint);
         distance += 8;
       }
     }
   }
 
   @override
-  bool shouldRepaint(
-    covariant _DashedBorderPainter oldDelegate,
-  ) {
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
     return oldDelegate.color != color ||
         oldDelegate.radius != radius;
   }
 }
 
-// ============================================================
-// BOOK COVER - PERBAIKAN UTAMA
-// ============================================================
+// BOOK COVER
 
 class BookCover extends StatelessWidget {
   final dynamic cover;
@@ -1553,10 +1410,8 @@ class BookCover extends StatelessWidget {
     this.height = 82,
   });
 
-  // Memeriksa apakah cover berupa URL internet.
   bool get _isNetworkImage {
     final value = cover?.toString().trim() ?? '';
-
     final uri = Uri.tryParse(value);
 
     return uri != null &&
@@ -1567,7 +1422,6 @@ class BookCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Jika cover berupa bytes dari image picker.
     if (cover is Uint8List) {
       return _frame(
         Image.memory(
@@ -1582,12 +1436,10 @@ class BookCover extends StatelessWidget {
 
     final path = cover?.toString().trim() ?? '';
 
-    // 2. Jika cover kosong.
     if (path.isEmpty) {
       return _frame(_placeholder());
     }
 
-    // 3. Jika cover berupa URL Supabase / internet.
     if (_isNetworkImage) {
       return _frame(
         Image.network(
@@ -1618,8 +1470,6 @@ class BookCover extends StatelessWidget {
       );
     }
 
-    // 4. Jika cover berupa asset lokal Flutter.
-    // Contoh: assets/images/hujan.jpeg
     return _frame(
       Image.asset(
         path,

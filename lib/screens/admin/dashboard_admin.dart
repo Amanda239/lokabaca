@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'kelola_buku.dart';
 import 'kelola_anggota.dart';
 import 'peminjaman_admin.dart';
+import '../auth/login_screen.dart';
 import 'admin_bottom_navigation.dart';
 
 class DashboardAdmin extends StatefulWidget {
@@ -26,6 +27,8 @@ class _DashboardAdminState extends State<DashboardAdmin> {
   int selectedIndex = 0;
 
   bool isLoading = true;
+  bool isNavigating = false;
+
   String? errorMessage;
 
   int totalBooks = 0;
@@ -41,9 +44,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     loadDashboardData();
   }
 
-  // =========================
   // LOAD DASHBOARD DATA
-  // =========================
 
   Future<void> loadDashboardData() async {
     if (!mounted) return;
@@ -208,9 +209,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     return deadline.isBefore(today);
   }
 
-  // =========================
   // MESSAGE
-  // =========================
 
   void showMessage(String message) {
     if (!mounted) return;
@@ -227,38 +226,54 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =========================
   // NAVIGATION
-  // =========================
 
   Future<void> navigateToPage(
     int index,
     Widget page,
   ) async {
+    if (!mounted || isNavigating) return;
+
     setState(() {
+      isNavigating = true;
       selectedIndex = index;
     });
 
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => page),
-    );
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => page,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        showMessage('Gagal membuka halaman: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          selectedIndex = 0;
+          isNavigating = false;
+        });
 
-    if (!mounted) return;
-
-    setState(() {
-      selectedIndex = 0;
-    });
-
-    await loadDashboardData();
+        await loadDashboardData();
+      } else {
+        isNavigating = false;
+      }
+    }
   }
 
   void _handleBottomNavigation(int index) {
+    if (!mounted || isNavigating) return;
+
     if (index == selectedIndex) return;
 
     switch (index) {
       case 0:
-        setState(() => selectedIndex = 0);
+        setState(() {
+          selectedIndex = 0;
+        });
         break;
 
       case 1:
@@ -288,6 +303,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           const AdminProfileScreen(),
         );
         break;
+
+      default:
+        showMessage('Halaman tidak ditemukan.');
     }
   }
 
@@ -298,16 +316,38 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  void _openReport() {
-    navigateToPage(
-      0,
-      const AdminReportScreen(),
-    );
+  Future<void> _openReport() async {
+    if (!mounted || isNavigating) return;
+
+    setState(() {
+      isNavigating = true;
+    });
+
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const AdminReportScreen(),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        showMessage('Gagal membuka laporan: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isNavigating = false;
+        });
+
+        await loadDashboardData();
+      } else {
+        isNavigating = false;
+      }
+    }
   }
 
-  // =========================
   // BUILD
-  // =========================
 
   @override
   Widget build(BuildContext context) {
@@ -345,9 +385,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =========================
   // HEADER
-  // =========================
 
   Widget _buildHeader() {
     return Container(
@@ -398,16 +436,11 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               ],
             ),
           ),
-
-          // NOTIFIKASI
           _buildHeaderButton(
             Icons.notifications_none_rounded,
             () => showMessage('Belum ada notifikasi baru'),
           ),
-
           const SizedBox(width: 5),
-
-          // PROFIL ADMIN
           _buildHeaderButton(
             Icons.account_circle_rounded,
             _openProfile,
@@ -422,7 +455,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     VoidCallback onTap,
   ) {
     return InkWell(
-      onTap: onTap,
+      onTap: isNavigating ? null : onTap,
       borderRadius: BorderRadius.circular(30),
       child: SizedBox(
         width: 36,
@@ -436,9 +469,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =========================
   // LOADING
-  // =========================
 
   Widget _buildLoading() {
     return const Center(
@@ -449,9 +480,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =========================
   // ERROR
-  // =========================
 
   Widget _buildError() {
     return Center(
@@ -503,9 +532,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =========================
   // DASHBOARD CONTENT
-  // =========================
 
   Widget _buildContent() {
     return RefreshIndicator(
@@ -522,7 +549,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
             const SizedBox(height: 28),
             _buildLoanHeader(),
             const SizedBox(height: 16),
-
             if (recentLoans.isEmpty)
               _buildEmptyLoans()
             else
@@ -532,7 +558,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                   child: _buildLoanCard(loan),
                 ),
               ),
-
             const SizedBox(height: 12),
             _buildReportButton(),
           ],
@@ -541,9 +566,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =========================
   // STATISTICS
-  // =========================
 
   Widget _buildStatistics() {
     final statistics = [
@@ -651,9 +674,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =========================
   // LOAN HEADER
-  // =========================
 
   Widget _buildLoanHeader() {
     return Row(
@@ -668,10 +689,12 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           ),
         ),
         InkWell(
-          onTap: () => navigateToPage(
-            3,
-            const PeminjamanAdminScreen(),
-          ),
+          onTap: isNavigating
+              ? null
+              : () => navigateToPage(
+                    3,
+                    const PeminjamanAdminScreen(),
+                  ),
           borderRadius: BorderRadius.circular(8),
           child: const Row(
             children: [
@@ -736,9 +759,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 
-  // =========================
   // LOAN CARD
-  // =========================
 
   Widget _buildLoanCard(Map<String, dynamic> loan) {
     final book = loan['books'] as Map<String, dynamic>?;
@@ -773,7 +794,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         : const Color(0xFF315F46);
 
     final borrowedAt = DateTime.tryParse(
-      (loan['borrowed_at'] ?? loan['created_at'])?.toString() ?? '',
+      (loan['borrowed_at'] ?? loan['created_at'])
+              ?.toString() ??
+          '',
     );
 
     return Container(
@@ -910,16 +933,14 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  // =========================
   // REPORT BUTTON
-  // =========================
 
   Widget _buildReportButton() {
     return SizedBox(
       width: double.infinity,
       height: 42,
       child: OutlinedButton.icon(
-        onPressed: _openReport,
+        onPressed: isNavigating ? null : _openReport,
         icon: const Icon(
           Icons.insert_chart_outlined_rounded,
           size: 18,
@@ -943,10 +964,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     );
   }
 }
-
-// =====================================================
-// HALAMAN PROFIL ADMIN
-// =====================================================
+// HALAMAN PROFIL ADMI
 
 class AdminProfileScreen extends StatefulWidget {
   const AdminProfileScreen({super.key});
@@ -991,6 +1009,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
       setState(() {
         profile = response;
         loading = false;
+        error = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -1005,14 +1024,16 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   Future<void> logout() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Keluar Akun'),
         content: const Text(
           'Apakah kamu yakin ingin keluar dari akun admin?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () {
+              Navigator.pop(dialogContext, false);
+            },
             child: const Text('Batal'),
           ),
           ElevatedButton(
@@ -1020,7 +1041,9 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
               backgroundColor: navy,
               foregroundColor: Colors.white,
             ),
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () {
+              Navigator.pop(dialogContext, true);
+            },
             child: const Text('Keluar'),
           ),
         ],
@@ -1034,12 +1057,19 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
 
       if (!mounted) return;
 
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (context) => const LoginScreen(),
+        ),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal keluar: $e')),
+        SnackBar(
+          content: Text('Gagal keluar: $e'),
+        ),
       );
     }
   }
@@ -1100,6 +1130,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
               : RefreshIndicator(
                   onRefresh: loadProfile,
                   child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(20),
                     children: [
                       const SizedBox(height: 25),
@@ -1245,10 +1276,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     );
   }
 }
-
-// =====================================================
-// HALAMAN LAPORAN ADMIN
-// =====================================================
+// HALAMAN LAPORAN ADMI
 
 class AdminReportScreen extends StatefulWidget {
   const AdminReportScreen({super.key});
@@ -1331,6 +1359,7 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
           if (dueDate != null) {
             final now = DateTime.now();
             final today = DateTime(now.year, now.month, now.day);
+
             final deadline = DateTime(
               dueDate.year,
               dueDate.month,
@@ -1599,7 +1628,9 @@ class _AdminReportScreenState extends State<AdminReportScreen> {
         item['status']?.toString().toUpperCase() ?? '-';
 
     final date = DateTime.tryParse(
-      (item['borrowed_at'] ?? item['created_at'])?.toString() ?? '',
+      (item['borrowed_at'] ?? item['created_at'])
+              ?.toString() ??
+          '',
     );
 
     return Container(

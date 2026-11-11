@@ -1,8 +1,12 @@
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'admin_bottom_navigation.dart';
+import 'dashboard_admin.dart';
+import 'kelola_buku.dart';
 import 'peminjaman_admin.dart';
+import 'profile_admin.dart';
 
 class KelolaAnggotaPage extends StatefulWidget {
   const KelolaAnggotaPage({super.key});
@@ -12,22 +16,13 @@ class KelolaAnggotaPage extends StatefulWidget {
 }
 
 class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
-  // =====================================================
-  // COLORS
-  // =====================================================
-
   static const Color navy = Color(0xFF2E4057);
   static const Color cream = Color(0xFFF8F4EA);
   static const Color mutedText = Color(0xFF9299A3);
   static const Color borderColor = Color(0xFF50647D);
 
-  // =====================================================
-  // SUPABASE
-  // =====================================================
-
   final SupabaseClient supabase = Supabase.instance.client;
-  final TextEditingController searchController =
-      TextEditingController();
+  final TextEditingController searchController = TextEditingController();
 
   List<Map<String, dynamic>> anggota = [];
 
@@ -49,9 +44,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     super.dispose();
   }
 
-  // =====================================================
   // MESSAGE
-  // =====================================================
 
   void showMessage(String message) {
     if (!mounted) return;
@@ -68,9 +61,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     );
   }
 
-  // =====================================================
   // FETCH ANGGOTA FROM SUPABASE
-  // =====================================================
 
   Future<void> loadAnggota() async {
     if (!mounted) return;
@@ -105,9 +96,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     }
   }
 
-  // =====================================================
   // SEARCH
-  // =====================================================
 
   List<Map<String, dynamic>> get filteredAnggota {
     final search = keyword.trim().toLowerCase();
@@ -130,52 +119,50 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     }).toList();
   }
 
-  // =====================================================
   // BOTTOM NAVIGATION
-  // =====================================================
 
-  void handleBottomNavigation(int index) {
-    if (index == 0) {
-      Navigator.pop(context);
-    } else if (index == 1) {
-      // Kembali ke halaman Kelola Buku sebelumnya.
-      Navigator.pop(context);
-    } else if (index == 2) {
-      setState(() {
-        selectedIndex = 2;
-      });
-    } else if (index == 3) {
-      navigateToPage(
-        3,
-        const PeminjamanAdminScreen(),
-      );
-    } else if (index == 4) {
-      showMessage('Halaman akun akan segera tersedia');
+  Future<void> handleBottomNavigation(int index) async {
+    if (index == selectedIndex) return;
+
+    if (index < 0 || index > 4) return;
+
+    Widget? page;
+
+    switch (index) {
+      case 0:
+        page = const DashboardAdmin();
+        break;
+
+      case 1:
+        page = const KelolaBukuScreen();
+        break;
+
+      case 2:
+        setState(() {
+          selectedIndex = 2;
+        });
+        return;
+
+      case 3:
+        page = const PeminjamanAdminScreen();
+        break;
+
+      case 4:
+        page = const AdminProfileScreen();
+        break;
     }
-  }
 
-  Future<void> navigateToPage(int index, Widget page) async {
-    setState(() {
-      selectedIndex = index;
-    });
+    if (page == null) return;
 
-    await Navigator.push(
+    await Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => page),
+      MaterialPageRoute(
+        builder: (_) => page!,
+      ),
     );
-
-    if (!mounted) return;
-
-    setState(() {
-      selectedIndex = 2;
-    });
-
-    await loadAnggota();
   }
 
-  // =====================================================
   // EDIT ANGGOTA
-  // =====================================================
 
   Future<void> editAnggota(Map<String, dynamic> item) async {
     final nisController = TextEditingController(
@@ -323,9 +310,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     nisController.dispose();
   }
 
-  // =====================================================
   // SAVE ANGGOTA
-  // =====================================================
 
   Future<void> saveAnggota({
     required String id,
@@ -351,7 +336,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
 
       if (!mounted) return;
 
-      // Perbarui data tanpa mengubah posisi card.
       setState(() {
         final index = anggota.indexWhere(
           (item) => item['id'].toString() == id,
@@ -368,9 +352,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     }
   }
 
-  // =====================================================
   // DELETE ANGGOTA
-  // =====================================================
 
   Future<void> deleteAnggota(Map<String, dynamic> item) async {
     final nama = item['full_name']?.toString() ?? 'anggota ini';
@@ -445,9 +427,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     }
   }
 
-  // =====================================================
   // AVATAR
-  // =====================================================
 
   Widget buildAvatar(Map<String, dynamic> item) {
     final avatarUrl = item['avatar_url']?.toString() ?? '';
@@ -483,9 +463,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     );
   }
 
-  // =====================================================
   // STATUS BADGE
-  // =====================================================
 
   Widget buildStatusBadge(String status) {
     final isActive = status.toLowerCase() == 'aktif';
@@ -518,9 +496,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     );
   }
 
-  // =====================================================
   // MEMBER CARD
-  // =====================================================
 
   Widget buildAnggotaCard(Map<String, dynamic> item) {
     final nama = item['full_name']?.toString() ?? 'Tanpa nama';
@@ -543,12 +519,9 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
       ),
       child: Row(
         children: [
-          // AVATAR
           buildAvatar(item),
-
           const SizedBox(width: 11),
 
-          // MEMBER INFORMATION
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,9 +537,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-
                 const SizedBox(height: 3),
-
                 Text(
                   'NIS : $nis',
                   maxLines: 1,
@@ -576,9 +547,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
                     fontSize: 11,
                   ),
                 ),
-
                 const SizedBox(height: 4),
-
                 buildStatusBadge(status),
               ],
             ),
@@ -586,7 +555,16 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
 
           const SizedBox(width: 5),
 
-          // DELETE BUTTON
+          IconButton(
+            tooltip: 'Edit anggota',
+            onPressed: () => editAnggota(item),
+            icon: const Icon(
+              Icons.edit_outlined,
+              color: navy,
+              size: 20,
+            ),
+          ),
+
           InkWell(
             onTap: () => deleteAnggota(item),
             borderRadius: BorderRadius.circular(30),
@@ -609,9 +587,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     );
   }
 
-  // =====================================================
   // HEADER
-  // =====================================================
 
   Widget buildHeader() {
     return Padding(
@@ -626,7 +602,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
               size: 19,
             ),
           ),
-
           const Expanded(
             child: Text(
               'Kelola Anggota',
@@ -638,16 +613,13 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
               ),
             ),
           ),
-
           const SizedBox(width: 48),
         ],
       ),
     );
   }
 
-  // =====================================================
   // SEARCH BAR
-  // =====================================================
 
   Widget buildSearchBar() {
     return Padding(
@@ -681,9 +653,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
             ),
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 8,
-            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 8),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(9),
               borderSide: const BorderSide(
@@ -711,9 +681,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     );
   }
 
-  // =====================================================
   // EMPTY STATE
-  // =====================================================
 
   Widget buildEmptyState() {
     final isSearching = keyword.trim().isNotEmpty;
@@ -755,9 +723,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     );
   }
 
-  // =====================================================
   // ERROR STATE
-  // =====================================================
 
   Widget buildErrorState() {
     return Center(
@@ -805,9 +771,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     );
   }
 
-  // =====================================================
   // MAIN CONTENT
-  // =====================================================
 
   Widget buildContent() {
     if (isLoading) {
@@ -855,31 +819,24 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     );
   }
 
-  // =====================================================
   // BUILD
-  // =====================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
       body: SafeArea(
         child: Column(
           children: [
             buildHeader(),
-
             buildSearchBar(),
-
             const SizedBox(height: 1),
-
             Expanded(
               child: buildContent(),
             ),
           ],
         ),
       ),
-
       bottomNavigationBar: AdminBottomNavigation(
         currentIndex: selectedIndex,
         onTap: handleBottomNavigation,
