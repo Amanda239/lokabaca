@@ -6,11 +6,13 @@ import '../auth/login_screen.dart';
 import 'user_bottom_navigation.dart';
 import 'edit_profile_screen.dart';
 import 'help_screen.dart';
+import 'pengaturan_aplikasi_screen.dart';
 
 import 'dashboard_screen.dart';
 import 'searchpage_screen.dart';
 import 'peminjaman_screen.dart';
 import 'collection_screen.dart';
+
 
 class ProfileScreen extends StatefulWidget {
   final ValueChanged<int>? onNavigationTap;
@@ -421,14 +423,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // PENGATURAN
 
                   _buildMenuItem(
-                    icon: Icons.settings_outlined,
-                    title: 'Pengaturan Aplikasi',
-                    subtitle:
-                        'Sesuaikan pengalaman membaca dan preferensi sesuai kebutuhan kamu',
-                    onTap: () {
-                      showMessage('Pengaturan aplikasi belum tersedia.');
-                    },
-                  ),
+                          icon: Icons.settings_outlined,
+                          title: 'Pengaturan Aplikasi',
+                          subtitle:
+                              'Sesuaikan pengalaman membaca dan preferensi sesuai kebutuhan kamu',
+                          onTap: _openSettings,
+                        ),
 
                   const SizedBox(height: 42),
 
@@ -607,6 +607,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await loadProfile();
     }
   }
+
+Future<void> _openSettings() async {
+  if (profile == null) return;
+
+  final result = await Navigator.push<bool>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => PengaturanAplikasiScreen(
+        profile: profile!,
+      ),
+    ),
+  );
+
+  if (result == true && mounted) {
+    await loadProfile();
+  }
+}
 
   // HELP
 

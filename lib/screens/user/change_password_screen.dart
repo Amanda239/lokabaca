@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -9,8 +10,9 @@ class ChangePasswordScreen extends StatefulWidget {
       _ChangePasswordScreenState();
 }
 
-class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
-  // Warna utama LokaBaca
+class _ChangePasswordScreenState
+    extends State<ChangePasswordScreen> {
+  // WARNA LOKABACA
   static const Color navy = Color(0xFF2E4057);
   static const Color cream = Color(0xFFF8F4EA);
   static const Color mutedText = Color(0xFF92929B);
@@ -29,7 +31,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   bool isOldPasswordVisible = false;
   bool isNewPasswordVisible = false;
   bool isConfirmPasswordVisible = false;
+  bool isLoading = false;
 
+  // VALIDASI PASSWORD
   bool get hasMinLength =>
       newPasswordController.text.length >= 8;
 
@@ -38,7 +42,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   bool get hasNumberAndSymbol =>
       RegExp(r'[0-9]').hasMatch(newPasswordController.text) &&
-      RegExp(r'[^a-zA-Z0-9]').hasMatch(newPasswordController.text);
+      RegExp(r'[^a-zA-Z0-9]').hasMatch(
+        newPasswordController.text,
+      );
 
   bool get isPasswordMatch =>
       newPasswordController.text.isNotEmpty &&
@@ -53,10 +59,20 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     super.dispose();
   }
 
-  // ==========================================
-  // PASSWORD INPUT
-  // ==========================================
+  // PESAN
+  void _showMessage(String message, {bool success = false}) {
+    if (!mounted) return;
 
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success ? Colors.green : navy,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // PASSWORD INPUT
   Widget _buildPasswordField({
     required String hint,
     required TextEditingController controller,
@@ -86,6 +102,12 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           color: navy,
           fontSize: 12,
         ),
+        onChanged: (_) {
+          if (controller == newPasswordController ||
+              controller == confirmPasswordController) {
+            setState(() {});
+          }
+        },
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(
@@ -118,10 +140,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     );
   }
 
-  // ==========================================
-  // PASSWORD REQUIREMENT CHECK
-  // ==========================================
-
+  // CHECKLIST PERSYARATAN PASSWORD
   Widget _buildRequirement(String text, bool isValid) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -130,14 +149,16 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           Icon(
             Icons.check,
             size: 17,
-            color: isValid ? const Color(0xFF777777) : mutedText,
+            color: isValid ? Colors.green : mutedText,
           ),
           const SizedBox(width: 10),
-          Text(
-            text,
-            style: TextStyle(
-              color: isValid ? const Color(0xFF777777) : mutedText,
-              fontSize: 11,
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: isValid ? Colors.green : mutedText,
+                fontSize: 11,
+              ),
             ),
           ),
         ],
@@ -145,99 +166,104 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     );
   }
 
-  // ==========================================
-  // SAVE PASSWORD
-  // ==========================================
+  // SIMPAN PASSWORD KE SUPABASE
+  Future<void> _savePassword() async {
+    if (isLoading) return;
 
-  void _savePassword() {
     if (!_formKey.currentState!.validate()) return;
 
     if (!hasMinLength ||
         !hasUppercase ||
         !hasNumberAndSymbol) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password belum memenuhi persyaratan.'),
-          backgroundColor: navy,
-        ),
+      _showMessage(
+        'Password belum memenuhi persyaratan.',
       );
       return;
     }
 
     if (!isPasswordMatch) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Konfirmasi password tidak sama.'),
-          backgroundColor: navy,
-        ),
+      _showMessage(
+        'Konfirmasi password tidak sama.',
       );
       return;
     }
 
-    // Frontend: tampilkan konfirmasi sementara.
-    // Hubungkan dengan Supabase untuk menyimpan password sebenarnya.
+    final oldPassword = oldPasswordController.text;
+    final newPassword = newPasswordController.text;
 
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.check_circle_rounded,
-                color: Color(0xFF4CAF50),
-                size: 55,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Validasi Berhasil!',
-                style: TextStyle(
-                  color: navy,
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Password baru sudah memenuhi semua persyaratan.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: mutedText,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 15),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: navy,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('Mengerti'),
-                ),
-              ),
-            ],
-          ),
+    if (oldPassword == newPassword) {
+      _showMessage(
+        'Password baru harus berbeda dari password lama.',
+      );
+      return;
+    }
+
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+
+    if (user == null || user.email == null) {
+      _showMessage(
+        'Sesi akun tidak ditemukan. Silakan login kembali.',
+      );
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      // 1. VERIFIKASI PASSWORD LAMA
+      await supabase.auth.signInWithPassword(
+        email: user.email!,
+        password: oldPassword,
+      );
+
+      // 2. UPDATE PASSWORD BARU
+      await supabase.auth.updateUser(
+        UserAttributes(
+          password: newPassword,
+        ),
+      );
+
+      if (!mounted) return;
+
+      _showMessage(
+        'Kata sandi berhasil diperbarui!',
+        success: true,
+      );
+
+      // 3. KEMBALI KE HALAMAN SEBELUMNYA
+      Navigator.pop(context, true);
+
+    } on AuthException catch (e) {
+      if (!mounted) return;
+
+      final message = e.message.toLowerCase();
+
+      if (message.contains('invalid') ||
+          message.contains('credentials') ||
+          message.contains('password')) {
+        _showMessage('Kata sandi lama tidak sesuai.');
+      } else {
+        _showMessage(
+          'Gagal mengganti kata sandi: ${e.message}',
         );
-      },
-    );
-  }
+      }
+    } catch (e) {
+      if (!mounted) return;
 
-  // ==========================================
-  // BUILD
-  // ==========================================
+      _showMessage(
+        'Terjadi kesalahan saat mengganti kata sandi.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -435,30 +461,42 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         isPasswordMatch,
                       ),
 
-                      const SizedBox(height: 35),
+                      const SizedBox(height: 65),
 
-                      // SAVE BUTTON
+                      // TOMBOL SIMPAN
                       SizedBox(
                         width: double.infinity,
                         height: 47,
                         child: ElevatedButton(
-                          onPressed: _savePassword,
+                          onPressed:
+                              isLoading ? null : _savePassword,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: navy,
                             foregroundColor: Colors.white,
+                            disabledBackgroundColor:
+                                const Color(0xFF8793A0),
                             elevation: 3,
                             shadowColor: Colors.black38,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(15),
                             ),
                           ),
-                          child: const Text(
-                            'Simpan',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text(
+                                  'Simpan',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
                         ),
                       ),
 

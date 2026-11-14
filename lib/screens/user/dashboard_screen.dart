@@ -7,6 +7,7 @@ import 'collection_screen.dart';
 import 'searchpage_screen.dart';
 import 'peminjaman_screen.dart';
 import 'profile_screen.dart';
+import 'detail_buku_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -27,6 +28,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'cover': 'assets/images/hujan.jpeg',
       'color': const Color(0xFF75C9E0),
       'icon': Icons.water_drop_rounded,
+
+      // Detail buku
+  'reviews': '8.5k ulasan',
+  'tags': ['Romansa', 'Drama', 'Fiksi'],
+  'synopsis':
+      'Novel Hujan karya Tere Liye menceritakan kisah Lail dan Esok yang bertemu di tengah bencana alam dahsyat. Di tengah kehilangan, persahabatan, cinta, dan kenangan, Lail harus menghadapi masa lalu serta menentukan apa yang ingin ia lupakan.',
+  'publisher': 'Gramedia Pustaka Utama',
+  'year': '2016',
+  'pages': '320 halaman',
     },
     {
       'title': 'Cake Shop',
@@ -36,6 +46,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'cover': 'assets/images/cakeshop.jpeg',
       'color': const Color(0xFFE9D0D0),
       'icon': Icons.cake_rounded,
+
+       // Detail buku
+  'reviews': '2.1k ulasan',
+  'tags': ['Romansa', 'Drama', 'Rekomendasi'],
+  'synopsis':
+      'Sebuah cerita tentang kehidupan, pertemuan, dan kisah cinta yang tumbuh di sebuah toko kue. Di balik aroma manis dan berbagai hidangan, tersimpan cerita tentang impian, persahabatan, dan kesempatan untuk menemukan kebahagiaan.',
+  'publisher': 'Penerbit Nana',
+  'year': '2023',
+  'pages': '250 halaman',
     },
     {
       'title': 'Bumi',
@@ -45,6 +64,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'cover': 'assets/images/bumi.jpeg',
       'color': const Color(0xFF244C38),
       'icon': Icons.public_rounded,
+
+      // Detail buku
+  'reviews': '9.2k ulasan',
+  'tags': ['Fantasi', 'Petualangan', 'Fiksi'],
+  'synopsis':
+      'Novel Bumi karya Tere Liye menceritakan petualangan Raib, seorang gadis yang memiliki kemampuan menghilang. Bersama kedua sahabatnya, Seli dan Ali, ia menjelajahi dunia paralel dan menghadapi berbagai petualangan penuh misteri.',
+  'publisher': 'Gramedia Pustaka Utama',
+  'year': '2014',
+  'pages': '440 halaman',
     },
     {
       'title': 'Laut Bercerita',
@@ -54,6 +82,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'cover': 'assets/images/lautbercerita.jpeg',
       'color': const Color(0xFF356B82),
       'icon': Icons.waves_rounded,
+
+      // Detail buku
+  'reviews': '12.4k ulasan',
+  'tags': ['Fiksi', 'Sastra', 'Rekomendasi'],
+  'synopsis':
+      'Novel Laut Bercerita karya Leila S. Chudori mengisahkan tentang kekejaman, penculikan, dan penghilangan paksa aktivis mahasiswa pada masa akhir Orde Baru tahun 1998.',
+  'publisher': 'Kepustakaan Populer Gramedia',
+  'year': '2017',
+  'pages': '379 halaman',
     },
   ];
 
@@ -368,9 +405,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => _showMessage(
-                  'Detail "${book['title']}" akan dibuat berikutnya.',
-                ),
+                onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DetailBukuScreen(
+                          book: book,
+                        ),
+                      ),
+                    );
+                  },
                 child: Padding(
                   padding: const EdgeInsets.all(7),
                   child: Column(
