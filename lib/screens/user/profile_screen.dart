@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -12,15 +11,12 @@ import 'dashboard_screen.dart';
 import 'searchpage_screen.dart';
 import 'peminjaman_screen.dart';
 import 'collection_screen.dart';
-
+import 'denda_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final ValueChanged<int>? onNavigationTap;
 
-  const ProfileScreen({
-    super.key,
-    this.onNavigationTap,
-  });
+  const ProfileScreen({super.key, this.onNavigationTap});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -101,9 +97,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void redirectToLogin() {
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(
-        builder: (_) => const LoginScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
       (route) => false,
     );
   }
@@ -139,9 +133,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => destination!,
-      ),
+      MaterialPageRoute(builder: (_) => destination!),
     );
   }
 
@@ -160,25 +152,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           title: const Text(
             'Keluar dari Akun?',
-            style: TextStyle(
-              color: navy,
-              fontWeight: FontWeight.w800,
-            ),
+            style: TextStyle(color: navy, fontWeight: FontWeight.w800),
           ),
           content: const Text(
             'Apakah kamu yakin ingin keluar dari akun LokaBaca?',
-            style: TextStyle(
-              color: mutedText,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: mutedText, fontSize: 13),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text(
-                'Batal',
-                style: TextStyle(color: mutedText),
-              ),
+              child: const Text('Batal', style: TextStyle(color: mutedText)),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(dialogContext, true),
@@ -205,9 +188,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
 
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
     } catch (e) {
@@ -244,8 +225,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: isLoading
             ? _buildLoading()
             : errorMessage != null
-                ? _buildError()
-                : _buildContent(),
+            ? _buildError()
+            : _buildContent(),
       ),
       bottomNavigationBar: UserBottomNavigation(
         selectedIndex: 4,
@@ -258,10 +239,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildLoading() {
     return const Center(
-      child: CircularProgressIndicator(
-        color: navy,
-        strokeWidth: 2.5,
-      ),
+      child: CircularProgressIndicator(color: navy, strokeWidth: 2.5),
     );
   }
 
@@ -274,11 +252,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.cloud_off_rounded,
-              color: navy,
-              size: 45,
-            ),
+            const Icon(Icons.cloud_off_rounded, color: navy, size: 45),
             const SizedBox(height: 15),
             const Text(
               'Profil gagal dimuat',
@@ -292,10 +266,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Text(
               errorMessage ?? 'Terjadi kesalahan.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: mutedText,
-                fontSize: 11,
-              ),
+              style: const TextStyle(color: mutedText, fontSize: 11),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
@@ -357,7 +328,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 25),
 
                   // FOTO DAN IDENTITAS USER
-
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -397,7 +367,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   // AKUN & KEAMANAN
                   // Menu ini membuka EditProfileScreen.
-
                   _buildMenuItem(
                     icon: Icons.security_outlined,
                     title: 'Akun & Keamanan',
@@ -408,7 +377,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 42),
 
                   // WISHLIST
-
                   _buildMenuItem(
                     icon: Icons.shopping_bag_outlined,
                     title: 'Wishlist Saya',
@@ -420,20 +388,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   const SizedBox(height: 42),
 
-                  // PENGATURAN
-
+                  // DENDA
+                  // Menu ini membuka DendaScreen.
                   _buildMenuItem(
-                          icon: Icons.settings_outlined,
-                          title: 'Pengaturan Aplikasi',
-                          subtitle:
-                              'Sesuaikan pengalaman membaca dan preferensi sesuai kebutuhan kamu',
-                          onTap: _openSettings,
-                        ),
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Denda Saya',
+                    subtitle: 'Cek dan bayar denda keterlambatan buku',
+                    onTap: _openDenda,
+                  ),
+
+                  const SizedBox(height: 42),
+
+                  // PENGATURAN
+                  _buildMenuItem(
+                    icon: Icons.settings_outlined,
+                    title: 'Pengaturan Aplikasi',
+                    subtitle:
+                        'Sesuaikan pengalaman membaca dan preferensi sesuai kebutuhan kamu',
+                    onTap: _openSettings,
+                  ),
 
                   const SizedBox(height: 42),
 
                   // DUKUNGAN
-
                   _buildMenuItem(
                     icon: Icons.help_outline_rounded,
                     title: 'Dukungan dan Layanan',
@@ -445,7 +422,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 65),
 
                   // KELUAR
-
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -474,10 +450,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(
-                          color: red,
-                          width: 1.3,
-                        ),
+                        side: const BorderSide(color: red, width: 1.3),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -501,10 +474,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       width: 78,
       height: 78,
-      decoration: const BoxDecoration(
-        color: yellow,
-        shape: BoxShape.circle,
-      ),
+      decoration: const BoxDecoration(color: yellow, shape: BoxShape.circle),
       clipBehavior: Clip.antiAlias,
       child: avatarUrl != null && avatarUrl.isNotEmpty
           ? Image.network(
@@ -520,11 +490,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _avatarPlaceholder() {
     return const Center(
-      child: Icon(
-        Icons.person_rounded,
-        color: Colors.white,
-        size: 43,
-      ),
+      child: Icon(Icons.person_rounded, color: Colors.white, size: 43),
     );
   }
 
@@ -545,11 +511,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           SizedBox(
             width: 42,
             height: 42,
-            child: Icon(
-              icon,
-              color: navy,
-              size: 32,
-            ),
+            child: Icon(icon, color: navy, size: 32),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -579,11 +541,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: navy,
-            size: 25,
-          ),
+          const Icon(Icons.chevron_right_rounded, color: navy, size: 25),
         ],
       ),
     );
@@ -596,10 +554,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final result = await Navigator.push<bool>(
       context,
+      MaterialPageRoute(builder: (_) => EditProfileScreen(profile: profile!)),
+    );
+
+    if (result == true && mounted) {
+      await loadProfile();
+    }
+  }
+
+  Future<void> _openSettings() async {
+    if (profile == null) return;
+
+    final result = await Navigator.push<bool>(
+      context,
       MaterialPageRoute(
-        builder: (_) => EditProfileScreen(
-          profile: profile!,
-        ),
+        builder: (_) => PengaturanAplikasiScreen(profile: profile!),
       ),
     );
 
@@ -608,31 +577,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-Future<void> _openSettings() async {
-  if (profile == null) return;
+  // DENDA
 
-  final result = await Navigator.push<bool>(
-    context,
-    MaterialPageRoute(
-      builder: (_) => PengaturanAplikasiScreen(
-        profile: profile!,
-      ),
-    ),
-  );
-
-  if (result == true && mounted) {
-    await loadProfile();
+  void _openDenda() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DendaScreen()),
+    );
   }
-}
 
   // HELP
 
   void _openHelp() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const HelpScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const HelpScreen()),
     );
   }
 }

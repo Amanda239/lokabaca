@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
@@ -7,6 +6,43 @@ import 'dashboard_screen.dart';
 import 'searchpage_screen.dart';
 import 'collection_screen.dart';
 import 'profile_screen.dart';
+import 'denda_screen.dart';
+
+// =====================================================
+// HALAMAN RIWAYAT PEMINJAMAN (USER)
+// Mengikuti desain Figma "Riwayat Peminjaman":
+//   header + tombol Dipinjam / Denda / Selesai + daftar buku.
+// =====================================================
+
+enum LoanStatus { dipinjam, selesai, terlambat }
+
+class LoanItem {
+  final String title;
+  final String author;
+  final String cover;
+  final DateTime borrowDate;
+
+  // Batas kembali (untuk Dipinjam / Terlambat)
+  // atau tanggal dikembalikan (untuk Selesai).
+  final DateTime endDate;
+
+  final LoanStatus status;
+
+  // Untuk buku Selesai yang dikembalikan melewati batas waktu.
+  final bool returnedLate;
+
+  const LoanItem({
+    required this.title,
+    required this.author,
+    required this.cover,
+    required this.borrowDate,
+    required this.endDate,
+    required this.status,
+    this.returnedLate = false,
+  });
+
+  bool get isLate => status == LoanStatus.terlambat || returnedLate;
+}
 
 class PeminjamanScreen extends StatefulWidget {
   final Map<String, dynamic>? selectedBook;
@@ -21,126 +57,124 @@ class PeminjamanScreen extends StatefulWidget {
 }
 
 class _PeminjamanScreenState extends State<PeminjamanScreen> {
-  int selectedTab = 0;
+  static const Color _darkText = Color(0xFF1E2A38);
+  static const Color _authorText = Color(0xFF555555);
+  static const Color _dateText = Color(0xFF6B6B6B);
+
   int selectedNav = 2;
 
-  // DATA BUKU YANG SEDANG DIPINJAM
-  final List<Map<String, dynamic>> borrowingBooks = [
-    {
-      'title': 'Laut Bercerita',
-      'author': 'Leila S. Chudori',
-      'cover': 'assets/images/lautbercerita.jpeg',
-      'color': const Color(0xFF355C70),
-      'icon': Icons.waves_rounded,
-      'borrowDate': DateTime(2026, 10, 12),
-      'returnDate': DateTime(2026, 10, 26),
-    },
-    {
-      'title': 'Bumi',
-      'author': 'Tere Liye',
-      'cover': 'assets/images/bumi.jpeg',
-      'color': const Color(0xFF65836A),
-      'icon': Icons.public_rounded,
-      'borrowDate': DateTime(2026, 9, 20),
-      'returnDate': DateTime(2026, 10, 4),
-    },
-  ];
+  // Filter: null = tampilkan semua, atau Dipinjam / Selesai.
+  // Tekan tombol yang sama sekali lagi untuk menampilkan semua.
+  LoanStatus? selectedFilter;
 
-  // DATA BUKU YANG SUDAH SELESAI
-  final List<Map<String, dynamic>> completedBooks = [
-    {
-      'title': 'Filosofi Teras',
-      'author': 'Henry Manampiring',
-      'cover': 'assets/images/filosofiteras.jpeg',
-      'color': const Color(0xFFB47A45),
-      'icon': Icons.spa_rounded,
-      'borrowDate': DateTime(2026, 9, 20),
-      'returnDate': DateTime(2026, 10, 4),
-      'actualReturnDate': DateTime(2026, 10, 3),
-    },
-    {
-      'title': 'Pulang',
-      'author': 'Tere Liye',
-      'cover': 'assets/images/pulang.jpeg',
-      'color': const Color(0xFF66547D),
-      'icon': Icons.nights_stay_rounded,
-      'borrowDate': DateTime(2026, 8, 10),
-      'returnDate': DateTime(2026, 8, 24),
-      'actualReturnDate': DateTime(2026, 8, 22),
-    },
+  // DATA CONTOH (sama seperti desain Figma)
+  // TODO: ganti dengan data dari Supabase.
+  final List<LoanItem> loans = [
+    LoanItem(
+      title: 'Laut Bercerita',
+      author: 'Leila S. Chudori',
+      cover: 'assets/images/lautbercerita.jpeg',
+      borrowDate: DateTime(2026, 3, 9),
+      endDate: DateTime(2026, 3, 17),
+      status: LoanStatus.dipinjam,
+    ),
+    LoanItem(
+      title: 'Bawang Merah',
+      author: 'Yudhistira Ikranegara',
+      cover: 'assets/images/bawangmerah.jpeg',
+      borrowDate: DateTime(2026, 6, 2),
+      endDate: DateTime(2026, 8, 28),
+      status: LoanStatus.selesai,
+    ),
+    LoanItem(
+      title: 'Bahasa Indonesia',
+      author: 'Kurikulum Merdeka kelas 12',
+      cover: 'assets/images/bindo.jpeg',
+      borrowDate: DateTime(2026, 8, 1),
+      endDate: DateTime(2026, 9, 8),
+      status: LoanStatus.terlambat,
+    ),
+    LoanItem(
+      title: 'Rumah Alie',
+      author: 'Lenn Liu',
+      cover: 'assets/images/rumahuntukalie.jpeg',
+      borrowDate: DateTime(2026, 9, 6),
+      endDate: DateTime(2026, 10, 17),
+      status: LoanStatus.selesai,
+    ),
   ];
 
   @override
   void initState() {
     super.initState();
 
+    // Buku yang baru dipinjam dari form peminjaman
+    // ditambahkan di urutan paling atas.
     final book = widget.selectedBook;
 
     if (book != null) {
       final today = DateUtils.dateOnly(DateTime.now());
 
-      borrowingBooks.insert(0, {
-        'title': book['title'] ?? 'Judul Buku',
-        'author': book['author'] ?? 'Penulis',
-        'cover': book['cover'] ?? '',
-        'color': book['color'] ?? AppColors.navy,
-        'icon': book['icon'] ?? Icons.menu_book_rounded,
-        'borrowDate': today,
-        'returnDate': today.add(const Duration(days: 14)),
-      });
+      loans.insert(
+        0,
+        LoanItem(
+          title: (book['title'] ?? 'Judul Buku').toString(),
+          author: (book['author'] ?? 'Penulis').toString(),
+          cover: (book['cover'] ?? '').toString(),
+          borrowDate: today,
+          endDate: today.add(const Duration(days: 14)),
+          status: LoanStatus.dipinjam,
+        ),
+      );
     }
   }
 
-  List<Map<String, dynamic>> get currentBooks {
-    return selectedTab == 0 ? borrowingBooks : completedBooks;
+  // Tombol "Dipinjam" menampilkan buku yang masih dipinjam
+  // (termasuk yang sudah terlambat dikembalikan).
+  List<LoanItem> get visibleLoans {
+    switch (selectedFilter) {
+      case LoanStatus.dipinjam:
+        return loans
+            .where((l) => l.status != LoanStatus.selesai)
+            .toList();
+      case LoanStatus.selesai:
+        return loans
+            .where((l) => l.status == LoanStatus.selesai)
+            .toList();
+      default:
+        return loans;
+    }
   }
+
+  // =====================================================
+  // BUILD
+  // =====================================================
 
   @override
   Widget build(BuildContext context) {
+    final list = visibleLoans;
+
     return Scaffold(
       backgroundColor: AppColors.white,
       body: SafeArea(
-        child: CustomScrollView(
+        bottom: false,
+        child: ListView(
           physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(18, 22, 18, 28),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  _buildHeader(),
-
-                  const SizedBox(height: 7),
-
-                  const Text(
-                    'Pantau status buku yang kamu pinjam.',
-                    style: TextStyle(
-                      color: AppColors.grey,
-                      fontSize: 11,
-                    ),
-                  ),
-
-                  const SizedBox(height: 23),
-
-                  _buildStatusTabs(),
-
-                  const SizedBox(height: 21),
-
-                  _buildSummary(),
-
-                  const SizedBox(height: 15),
-
-                  if (currentBooks.isEmpty)
-                    _buildEmptyState()
-                  else
-                    ...currentBooks.map(
-                      (book) => Padding(
-                        padding: const EdgeInsets.only(bottom: 13),
-                        child: _buildBorrowingCard(book),
-                      ),
-                    ),
-                ]),
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 26),
+            _buildFilterButtons(),
+            const SizedBox(height: 28),
+            if (list.isEmpty)
+              _buildEmptyState()
+            else
+              ...list.map(
+                (loan) => Padding(
+                  padding: const EdgeInsets.only(bottom: 28),
+                  child: _buildLoanItem(loan),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -151,448 +185,284 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     );
   }
 
-  // HEADER
+  // =====================================================
+  // HEADER "< Riwayat Peminjaman"
+  // =====================================================
+
   Widget _buildHeader() {
     return Row(
       children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: _goBack,
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Icon(
+              Icons.chevron_left_rounded,
+              color: AppColors.navy,
+              size: 32,
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
         const Expanded(
           child: Text(
             'Riwayat Peminjaman',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: AppColors.navy,
-              fontSize: 21,
+              fontSize: 19,
               fontWeight: FontWeight.w800,
             ),
           ),
         ),
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: AppColors.cream,
-            borderRadius: BorderRadius.circular(13),
-          ),
-          child: const Icon(
-            Icons.menu_book_rounded,
-            color: AppColors.navy,
-            size: 22,
-          ),
-        ),
       ],
     );
   }
 
-  // TAB STATUS
-  Widget _buildStatusTabs() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF4F1EA),
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        children: [
-          _buildTab(
-            label: 'Sedang Dipinjam',
-            index: 0,
-            icon: Icons.menu_book_rounded,
-          ),
-          _buildTab(
-            label: 'Selesai',
-            index: 1,
-            icon: Icons.check_circle_outline_rounded,
-          ),
-        ],
-      ),
-    );
-  }
+  // =====================================================
+  // TOMBOL "Dipinjam" | "Denda" | "Selesai"
+  // =====================================================
 
-  Widget _buildTab({
-    required String label,
-    required int index,
-    required IconData icon,
-  }) {
-    final active = selectedTab == index;
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            selectedTab = index;
-          });
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(
-            vertical: 12,
-            horizontal: 5,
-          ),
-          decoration: BoxDecoration(
-            color: active ? AppColors.navy : Colors.transparent,
-            borderRadius: BorderRadius.circular(25),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 15,
-                color: active ? AppColors.white : AppColors.grey,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: active ? AppColors.white : AppColors.grey,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // RINGKASAN
-  Widget _buildSummary() {
-    final count = currentBooks.length;
-
-    final label = selectedTab == 0
-        ? 'buku sedang dipinjam'
-        : 'buku telah selesai';
-
+  Widget _buildFilterButtons() {
+    // Ketiga tombol dibuat sama lebar (Expanded).
     return Row(
       children: [
         Expanded(
-          child: Text(
-            '$count $label',
-            style: const TextStyle(
-              color: AppColors.grey,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
+          child: _buildPill(
+            label: 'Dipinjam',
+            active: selectedFilter == LoanStatus.dipinjam,
+            onTap: () => _toggleFilter(LoanStatus.dipinjam),
           ),
         ),
-        Icon(
-          selectedTab == 0
-              ? Icons.access_time_rounded
-              : Icons.check_circle_outline_rounded,
-          size: 15,
-          color: AppColors.grey,
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildPill(
+            label: 'Denda',
+            active: false,
+            onTap: _openDenda,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildPill(
+            label: 'Selesai',
+            active: selectedFilter == LoanStatus.selesai,
+            onTap: () => _toggleFilter(LoanStatus.selesai),
+          ),
         ),
       ],
     );
   }
 
-  // KARTU BUKU
-  Widget _buildBorrowingCard(Map<String, dynamic> book) {
-    final borrowDate = book['borrowDate'] as DateTime;
-    final returnDate = book['returnDate'] as DateTime;
-    final actualReturnDate = book['actualReturnDate'] as DateTime?;
-
-    final isCompleted = selectedTab == 1;
-
-    final today = DateUtils.dateOnly(DateTime.now());
-    final dueDate = DateUtils.dateOnly(returnDate);
-
-    final isOverdue = !isCompleted && today.isAfter(dueDate);
-
-    final lateDays = isOverdue
-        ? today.difference(dueDate).inDays
-        : 0;
-
-    final isOnTime = isCompleted &&
-        actualReturnDate != null &&
-        !DateUtils.dateOnly(actualReturnDate).isAfter(dueDate);
-
-    final isLateReturn = isCompleted &&
-        actualReturnDate != null &&
-        DateUtils.dateOnly(actualReturnDate).isAfter(dueDate);
-
-    final status = isCompleted
-        ? 'Selesai'
-        : isOverdue
-            ? 'Terlambat'
-            : 'Dipinjam';
-
-    final statusColor = _getStatusColor(status);
-    final statusBackground = _getStatusBackground(status);
-
-    final timingLabel = isCompleted
-        ? actualReturnDate == null
-            ? 'Tanggal pengembalian belum tersedia'
-            : isOnTime
-                ? 'Dikembalikan tepat waktu'
-                : 'Dikembalikan terlambat'
-        : isOverdue
-            ? 'Terlambat $lateDays hari'
-            : 'Tepat waktu';
-
-    final timingColor = isLateReturn || isOverdue
-        ? const Color(0xFFC54B4B)
-        : const Color(0xFF43845B);
-
+  Widget _buildPill({
+    required String label,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: const Color(0xFFEAE6DE),
-          width: 0.8,
-        ),
-        boxShadow: [
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: const [
           BoxShadow(
-            color: AppColors.navy.withOpacity(0.07),
-            blurRadius: 13,
-            offset: const Offset(0, 4),
+            color: Color(0x40000000),
+            blurRadius: 4,
+            offset: Offset(0, 3),
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Row(
+      child: Material(
+        color: active ? AppColors.yellow : AppColors.navy,
+        borderRadius: BorderRadius.circular(30),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(30),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 11,
+            ),
+            child: Center(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: active ? AppColors.navy : AppColors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _toggleFilter(LoanStatus status) {
+    setState(() {
+      selectedFilter = selectedFilter == status ? null : status;
+    });
+  }
+
+  // =====================================================
+  // ITEM BUKU
+  // =====================================================
+
+  Widget _buildLoanItem(LoanItem loan) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // COVER BUKU
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: Image.asset(
+            loan.cover,
+            width: 60,
+            height: 86,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              width: 60,
+              height: 86,
+              color: AppColors.border,
+              child: const Icon(
+                Icons.menu_book_rounded,
+                color: AppColors.navy,
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 16),
+
+        // INFORMASI BUKU
+        Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // COVER BUKU
-              SizedBox(
-                width: 79,
-                height: 112,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(9),
-                  child: Image.asset(
-                    book['cover'] as String,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) {
-                      return Container(
-                        color: book['color'] as Color,
-                        alignment: Alignment.center,
-                        child: Icon(
-                          book['icon'] as IconData,
-                          color: AppColors.yellow,
-                          size: 30,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        loan.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 11),
-
-              // INFORMASI BUKU
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      book['title'] as String,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
                       ),
                     ),
-
-                    const SizedBox(height: 4),
-
-                    Text(
-                      book['author'] as String,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.grey,
-                        fontSize: 9,
-                      ),
-                    ),
-
-                    const SizedBox(height: 9),
-
-                    Row(
-                      children: [
-                        Icon(
-                          isLateReturn || isOverdue
-                              ? Icons.error_rounded
-                              : Icons.check_circle_rounded,
-                          size: 12,
-                          color: timingColor,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            timingLabel,
-                            style: TextStyle(
-                              color: timingColor,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 9),
-
-                    _buildDateInfo(
-                      icon: Icons.calendar_today_rounded,
-                      label: 'Mulai',
-                      date: borrowDate,
-                    ),
-
-                    const SizedBox(height: 5),
-
-                    _buildDateInfo(
-                      icon: Icons.event_rounded,
-                      label: isCompleted ? 'Kembali' : 'Batas',
-                      date: isCompleted && actualReturnDate != null
-                          ? actualReturnDate
-                          : returnDate,
-                    ),
-                  ],
+                  ),
+                  const SizedBox(width: 8),
+                  _buildStatusBadge(loan.status),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                loan.author,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _authorText,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-
-              const SizedBox(width: 7),
-
-              // STATUS
-              Container(
-                constraints: const BoxConstraints(maxWidth: 78),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 6,
+              const SizedBox(height: 3),
+              Text(
+                loan.isLate ? 'Terlambat' : 'Tepat waktu',
+                style: TextStyle(
+                  color: loan.isLate
+                      ? const Color(0xFFFF0000)
+                      : _dateText,
+                  fontSize: 12.5,
                 ),
-                decoration: BoxDecoration(
-                  color: statusBackground,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w800,
-                  ),
+              ),
+              const SizedBox(height: 11),
+              Text(
+                '${_formatDate(loan.borrowDate)} - '
+                '${_formatDate(loan.endDate)}',
+                style: const TextStyle(
+                  color: _dateText,
+                  fontSize: 12,
+                  height: 1.3,
                 ),
               ),
             ],
-          ),
-
-          // INFORMASI DENDA
-          if (isOverdue || isLateReturn) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF0F0),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    color: Color(0xFFC54B4B),
-                    size: 16,
-                  ),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Text(
-                      isOverdue
-                          ? 'Buku terlambat $lateDays hari. Silakan hubungi admin untuk informasi nominal denda.'
-                          : 'Buku dikembalikan melewati batas waktu. Silakan periksa informasi denda kepada admin.',
-                      style: const TextStyle(
-                        color: Color(0xFFC54B4B),
-                        fontSize: 9,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // INFORMASI TANGGAL
-  Widget _buildDateInfo({
-    required IconData icon,
-    required String label,
-    required DateTime date,
-  }) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 11,
-          color: AppColors.grey,
-        ),
-        const SizedBox(width: 5),
-        Text(
-          '$label: ',
-          style: const TextStyle(
-            color: AppColors.grey,
-            fontSize: 8,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            _formatDate(date),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.navy,
-              fontSize: 8,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ),
       ],
     );
   }
 
-  // EMPTY STATE
-  Widget _buildEmptyState() {
+  Widget _buildStatusBadge(LoanStatus status) {
+    late final String label;
+    late final Color background;
+
+    switch (status) {
+      case LoanStatus.dipinjam:
+        label = 'Dipinjam';
+        background = const Color(0xFFF5C85F);
+        break;
+      case LoanStatus.selesai:
+        label = 'Selesai';
+        background = const Color(0xFF53E044);
+        break;
+      case LoanStatus.terlambat:
+        label = 'Terlambat';
+        background = const Color(0xFFF25555);
+        break;
+    }
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        vertical: 40,
-        horizontal: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(5),
       ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: _darkText,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  // =====================================================
+  // EMPTY STATE
+  // =====================================================
+
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.cream,
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              selectedTab == 0
-                  ? Icons.menu_book_rounded
-                  : Icons.check_circle_outline_rounded,
+            child: const Icon(
+              Icons.menu_book_rounded,
               color: AppColors.navy,
               size: 38,
             ),
           ),
           const SizedBox(height: 16),
-          Text(
-            selectedTab == 0
-                ? 'Belum Ada Peminjaman'
-                : 'Belum Ada Riwayat Selesai',
-            style: const TextStyle(
+          const Text(
+            'Belum Ada Riwayat',
+            style: TextStyle(
               color: AppColors.navy,
               fontWeight: FontWeight.w800,
               fontSize: 14,
@@ -604,7 +474,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.grey,
-              fontSize: 10,
+              fontSize: 11,
             ),
           ),
         ],
@@ -612,41 +482,43 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     );
   }
 
-  // FORMAT TANGGAL
+  // =====================================================
+  // FORMAT TANGGAL  (contoh: 9 Maret 2026)
+  // =====================================================
+
   String _formatDate(DateTime date) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr',
-      'Mei', 'Jun', 'Jul', 'Agu',
-      'Sep', 'Okt', 'Nov', 'Des',
+      'Januari', 'Februari', 'Maret', 'April',
+      'Mei', 'Juni', 'Juli', 'Agustus',
+      'September', 'Oktober', 'November', 'Desember',
     ];
 
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
-  // WARNA STATUS
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Selesai':
-        return const Color(0xFF287346);
-      case 'Terlambat':
-        return const Color(0xFFB83232);
-      default:
-        return const Color(0xFF926700);
-    }
-  }
-
-  Color _getStatusBackground(String status) {
-    switch (status) {
-      case 'Selesai':
-        return const Color(0xFFDDF3E4);
-      case 'Terlambat':
-        return const Color(0xFFFCE5E5);
-      default:
-        return const Color(0xFFFFF0C2);
-    }
-  }
-
+  // =====================================================
   // NAVIGASI
+  // =====================================================
+
+  void _goBack() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+    );
+  }
+
+  void _openDenda() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DendaScreen()),
+    );
+  }
+
   void _navigateTo(int index) {
     if (index == selectedNav) return;
 
@@ -673,9 +545,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => destination!,
-      ),
+      MaterialPageRoute(builder: (_) => destination!),
     );
   }
 }

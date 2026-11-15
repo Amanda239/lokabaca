@@ -1,4 +1,3 @@
-
 name: app
 description: "Aplikasi Perpustakaan Digital LokaBaca"
 publish_to: 'none'
@@ -15,6 +14,7 @@ dependencies:
   supabase_flutter: ^2.15.4
   image_picker: ^1.2.1
   intl: ^0.20.2
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
