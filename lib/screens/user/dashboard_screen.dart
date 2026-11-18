@@ -9,6 +9,7 @@ import 'peminjaman_screen.dart';
 import 'profile_screen.dart';
 import 'detail_buku_screen.dart';
 import 'wishlist_screen.dart';
+import 'denda_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -140,9 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
   // HEADER
-  // ==========================================
 
   Widget _buildHeader() {
     return Row(
@@ -186,9 +185,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           visualDensity: VisualDensity.compact,
         ),
         IconButton(
-          onPressed: () => _showMessage(
-            'Halaman akun akan dibuat berikutnya.',
-          ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ProfileScreen(),
+              ),
+            );
+          },
           icon: const Icon(
             Icons.account_circle_rounded,
             color: AppColors.navy,
@@ -200,16 +204,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
   // SEARCH BAR
-  // ==========================================
 
   Widget _buildSearchBar() {
     return Material(
       color: const Color(0xFFF8F4EC),
       elevation: 2,
-      shadowColor:
-          const Color(0xFF2F4156).withOpacity(0.12),
+      shadowColor: const Color(0xFF2F4156).withOpacity(0.12),
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         borderRadius: BorderRadius.circular(13),
@@ -251,9 +252,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
   // BANNER
-  // ==========================================
 
   Widget _buildBanner(double availableWidth) {
     final bannerHeight =
@@ -273,15 +272,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
   // SHORTCUTS
-  // ==========================================
 
   Widget _buildShortcuts() {
     final shortcuts = [
       {
-        'label': 'Pinjam Buku',
-        'icon': Icons.menu_book_rounded,
+        'label': 'Denda',
+        'icon': Icons.receipt_long_rounded,
       },
       {
         'label': 'Wishlist',
@@ -305,58 +302,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onTap: () {
               final label = shortcut['label'] as String;
 
-              if (label == 'Wishlist') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const WishlistScreen(),
-                  ),
-                );
-              } else if (label == 'Pinjam Buku') {
-                _openSearch();
-              } else if (label == 'Riwayat') {
-                _openBorrowing();
-              } else if (label == 'Profil') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const ProfileScreen(),
-                  ),
-                );
-              } else {
-                _showMessage(
-                  'Halaman $label akan dibuat berikutnya.',
-                );
+              switch (label) {
+                case 'Denda':
+                  _openFine();
+                  break;
+
+                case 'Wishlist':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const WishlistScreen(),
+                    ),
+                  );
+                  break;
+
+                case 'Riwayat':
+                  _openBorrowing();
+                  break;
+
+                case 'Profil':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ProfileScreen(),
+                    ),
+                  );
+                  break;
               }
             },
-            child: Column(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFAF5EB),
-                    shape: BoxShape.circle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: 5,
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFAF5EB),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      shortcut['icon'] as IconData,
+                      color: AppColors.navy,
+                      size: 22,
+                    ),
                   ),
-                  child: Icon(
-                    shortcut['icon'] as IconData,
-                    color: AppColors.navy,
-                    size: 22,
+                  const SizedBox(height: 7),
+                  Text(
+                    shortcut['label'] as String,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  shortcut['label'] as String,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.navy,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -364,9 +370,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
   // SECTION HEADER
-  // ==========================================
 
   Widget _buildSectionHeader(
     String title,
@@ -415,9 +419,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
   // POPULAR BOOKS
-  // ==========================================
 
   Widget _buildPopularBooks(double availableWidth) {
     final cardWidth =
@@ -535,9 +537,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
   // BOTTOM NAVIGATION HANDLER
-  // ==========================================
 
   void _navigateTo(int index) {
     if (index == selectedNav) return;
@@ -576,9 +576,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
   // NAVIGATION HELPERS
-  // ==========================================
 
   void _openSearch() {
     Navigator.push(
@@ -598,9 +596,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ==========================================
+  void _openFine() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const DendaScreen(),
+      ),
+    );
+  }
+
   // MESSAGE
-  // ==========================================
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(

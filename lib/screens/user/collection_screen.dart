@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
 import 'user_bottom_navigation.dart';
@@ -16,92 +17,27 @@ class CollectionScreen extends StatefulWidget {
 }
 
 class _CollectionScreenState extends State<CollectionScreen> {
-  int selectedNav = 3;
-  int currentPage = 0;
-
-  static const int booksPerPage = 3;
-
-  String searchQuery = '';
+  final supabase = Supabase.instance.client;
 
   final TextEditingController searchController =
       TextEditingController();
 
-  final List<Map<String, dynamic>> books = [
-    {
-      'title': 'Keajaiban Toko Kelontong Namiya',
-      'author': 'Keigo Higashino',
-      'status': 'Dipinjam',
-      'dueDate': '17 Juni 1997',
-      'asset': 'assets/images/namiya.jpeg',
-      'color': const Color(0xFF3F4C9B),
-      'icon': Icons.auto_stories_rounded,
-    },
-    {
-      'title': 'Namakua Alam',
-      'author': 'Leila S. Chudori',
-      'status': 'Dipinjam',
-      'dueDate': '17 Juni 1997',
-      'asset': 'assets/images/namakualam.jpeg',
-      'color': const Color(0xFF9D3028),
-      'icon': Icons.waves_rounded,
-    },
-    {
-      'title': 'Dompet Ayah Sepatu Ibu',
-      'author': 'J.S. Khairen',
-      'status': 'Dipinjam',
-      'dueDate': '17 Juni 1997',
-      'asset': 'assets/images/dompetayah.jpeg',
-      'color': const Color(0xFF58AEB4),
-      'icon': Icons.menu_book_rounded,
-    },
-    {
-      'title': 'Laut Bercerita',
-      'author': 'Leila S. Chudori',
-      'status': 'Dipinjam',
-      'dueDate': '20 Juni 1997',
-      'asset': 'assets/images/lautbercerita.jpeg',
-      'color': const Color(0xFF355C70),
-      'icon': Icons.waves_rounded,
-    },
-    {
-      'title': 'Bumi',
-      'author': 'Tere Liye',
-      'status': 'Dipinjam',
-      'dueDate': '22 Juni 1997',
-      'asset': 'assets/images/bumi.jpeg',
-      'color': const Color(0xFF65836A),
-      'icon': Icons.public_rounded,
-    },
-  ];
+  int selectedNav = 3;
+  int currentPage = 0;
 
-  List<Map<String, dynamic>> get filteredBooks {
-    final query = searchQuery.trim().toLowerCase();
+  static const int booksPerPage = 10;
 
-    if (query.isEmpty) return books;
+  String searchQuery = '';
 
-    return books.where((book) {
-      return book['title']
-              .toString()
-              .toLowerCase()
-              .contains(query) ||
-          book['author']
-              .toString()
-              .toLowerCase()
-              .contains(query);
-    }).toList();
-  }
+  List<Map<String, dynamic>> books = [];
 
-  int get totalPages {
-    return (filteredBooks.length / booksPerPage).ceil();
-  }
+  bool isLoading = true;
+  String? errorMessage;
 
-  List<Map<String, dynamic>> get currentBooks {
-    final startIndex = currentPage * booksPerPage;
-
-    final endIndex = (startIndex + booksPerPage)
-        .clamp(0, filteredBooks.length);
-
-    return filteredBooks.sublist(startIndex, endIndex);
+  @override
+  void initState() {
+    super.initState();
+    loadCollection();
   }
 
   @override
@@ -110,12 +46,213 @@ class _CollectionScreenState extends State<CollectionScreen> {
     super.dispose();
   }
 
+  // LOAD DATA KOLEKSI DARI SUPABASE
+  Future<void> loadCollection() async {
+    try {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
+
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('Pengguna belum login.');
+      }
+
+      // Mengambil data peminjaman milik pengguna
+      final borrowingResponse = await supabase
+          .from('borrowings')
+          .select()
+          .eq('user_id', user.id)
+          .order('borrowed_at', ascending: false);
+
+      final borrowings =
+          List<Map<String, dynamic>>.from(borrowingResponse);
+
+      if (borrowings.isEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          books = [];
+          isLoading = false;
+          currentPage = 0;
+        });
+
+        return;
+      }
+
+      // Mengambil ID buku dari data peminjaman
+      final bookIds = borrowings
+          .map((item) => item['book_id'])
+          .where((id) => id != null)
+          .toSet()
+          .toList();
+
+      if (bookIds.isEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          books = [];
+          isLoading = false;
+          currentPage = 0;
+        });
+
+        return;
+      }
+
+      // Mengambil informasi buku
+      final bookResponse = await supabase
+          .from('books')
+          .select()
+          .inFilter('id', bookIds);
+
+      final bookList =
+          List<Map<String, dynamic>>.from(bookResponse);
+
+      // Membuat map agar data buku mudah dicari berdasarkan ID
+      final Map<dynamic, Map<String, dynamic>> bookMap = {
+        for (final book in bookList) book['id']: book,
+      };
+
+      // Menggabungkan data peminjaman dengan data buku
+      final List<Map<String, dynamic>> collection = [];
+
+      for (final borrowing in borrowings) {
+        final book = bookMap[borrowing['book_id']];
+
+        if (book == null) continue;
+
+        collection.add({
+          'borrowing_id': borrowing['id'],
+          'book_id': borrowing['book_id'],
+          'title': book['title'] ?? 'Tanpa Judul',
+          'author': book['author'] ?? 'Penulis tidak diketahui',
+          'cover_url': book['cover_url'],
+          'status': borrowing['status'] ?? 'Menunggu',
+          'due_date': borrowing['due_date'],
+          'borrowed_at': borrowing['borrowed_at'],
+          'returned_at': borrowing['returned_at'],
+        });
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        books = collection;
+        isLoading = false;
+        currentPage = 0;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage = e.toString();
+        isLoading = false;
+      });
+    }
+  }
+
+  // FILTER PENCARIAN
+  List<Map<String, dynamic>> get filteredBooks {
+    final query = searchQuery.trim().toLowerCase();
+
+    if (query.isEmpty) return books;
+
+    return books.where((book) {
+      final title =
+          book['title'].toString().toLowerCase();
+
+      final author =
+          book['author'].toString().toLowerCase();
+
+      return title.contains(query) || author.contains(query);
+    }).toList();
+  }
+
+  // TOTAL HALAMAN
+  int get totalPages {
+    final total = filteredBooks.length;
+
+    return total == 0 ? 0 : (total / booksPerPage).ceil();
+  }
+
+  // BUKU DI HALAMAN AKTIF
+  List<Map<String, dynamic>> get currentBooks {
+    final result = filteredBooks;
+
+    final startIndex = currentPage * booksPerPage;
+
+    if (startIndex >= result.length) return [];
+
+    final endIndex =
+        (startIndex + booksPerPage).clamp(0, result.length);
+
+    return result.sublist(startIndex, endIndex);
+  }
+
+  // GANTI HALAMAN
   void _changePage(int page) {
     if (page < 0 || page >= totalPages) return;
 
     setState(() {
       currentPage = page;
     });
+  }
+
+  // FORMAT TANGGAL
+  String _formatDate(dynamic date) {
+    if (date == null || date.toString().isEmpty) {
+      return '-';
+    }
+
+    try {
+      final parsedDate = DateTime.parse(date.toString()).toLocal();
+
+      const months = [
+        'Januari',
+        'Februari',
+        'Maret',
+        'April',
+        'Mei',
+        'Juni',
+        'Juli',
+        'Agustus',
+        'September',
+        'Oktober',
+        'November',
+        'Desember',
+      ];
+
+      return '${parsedDate.day} '
+          '${months[parsedDate.month - 1]} '
+          '${parsedDate.year}';
+    } catch (_) {
+      return '-';
+    }
+  }
+
+  // WARNA STATUS
+  Color _statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'dipinjam':
+        return const Color(0xFFE8B94F);
+
+      case 'menunggu':
+        return const Color(0xFF7895C1);
+
+      case 'menunggu pengembalian':
+        return const Color(0xFFB58BCE);
+
+      case 'dikembalikan':
+        return const Color(0xFF65A77A);
+
+      case 'ditolak':
+        return const Color(0xFFD77B70);
+
+      default:
+        return AppColors.grey;
+    }
   }
 
   // NAVIGASI ANTAR HALAMAN
@@ -167,81 +304,107 @@ class _CollectionScreenState extends State<CollectionScreen> {
             final horizontalPadding =
                 constraints.maxWidth >= 600 ? 32.0 : 16.0;
 
-            return CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                // HEADER DAN SEARCH
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontalPadding,
-                    20,
-                    horizontalPadding,
-                    20,
-                  ),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildHeader(),
-                      const SizedBox(height: 28),
-                      _buildSearchField(),
-                      const SizedBox(height: 20),
-                    ]),
-                  ),
+            return RefreshIndicator(
+              color: AppColors.navy,
+              onRefresh: loadCollection,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
                 ),
-
-                // DAFTAR BUKU: 3 BUKU PER HALAMAN
-                if (displayedBooks.isNotEmpty)
+                slivers: [
+                  // HEADER DAN SEARCH
                   SliverPadding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: horizontalPadding,
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      20,
+                      horizontalPadding,
+                      20,
                     ),
                     sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          return Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: 18),
-                            child: _buildBookCard(
-                              displayedBooks[index],
-                            ),
-                          );
-                        },
-                        childCount: displayedBooks.length,
+                      delegate: SliverChildListDelegate([
+                        _buildHeader(),
+                        const SizedBox(height: 28),
+                        _buildSearchField(),
+                        const SizedBox(height: 20),
+                      ]),
+                    ),
+                  ),
+
+                  // LOADING
+                  if (isLoading)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.white,
+                        ),
+                      ),
+                    )
+
+                  // ERROR
+                  else if (errorMessage != null)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: _buildErrorState(),
+                    )
+
+                  // DAFTAR BUKU
+                  else if (displayedBooks.isNotEmpty)
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: horizontalPadding,
+                      ),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            return Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: 18,
+                              ),
+                              child: _buildBookCard(
+                                displayedBooks[index],
+                              ),
+                            );
+                          },
+                          childCount: displayedBooks.length,
+                        ),
+                      ),
+                    )
+
+                  // EMPTY STATE
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: horizontalPadding,
+                      ),
+                      sliver: SliverToBoxAdapter(
+                        child: _buildEmptyState(),
                       ),
                     ),
-                  ),
 
-                // EMPTY STATE
-                if (filteredBooks.isEmpty)
-                  SliverPadding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: horizontalPadding,
-                    ),
-                    sliver: SliverToBoxAdapter(
-                      child: _buildEmptyState(),
-                    ),
-                  ),
-
-                // PAGINATION
-                if (totalPages > 1)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        top: 4,
-                        bottom: 24,
+                  // PAGINATION
+                  if (!isLoading &&
+                      errorMessage == null &&
+                      totalPages > 1)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          top: 4,
+                          bottom: 24,
+                        ),
+                        child: _buildPagination(),
                       ),
-                      child: _buildPagination(),
                     ),
-                  ),
 
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 16),
-                ),
-              ],
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: 16),
+                  ),
+                ],
+              ),
             );
           },
         ),
       ),
-
       bottomNavigationBar: UserBottomNavigation(
         selectedIndex: selectedNav,
         onTap: _navigateTo,
@@ -286,6 +449,14 @@ class _CollectionScreenState extends State<CollectionScreen> {
               fontSize: 17,
               fontWeight: FontWeight.w800,
             ),
+          ),
+        ),
+        IconButton(
+          onPressed: loadCollection,
+          icon: const Icon(
+            Icons.refresh_rounded,
+            color: AppColors.white,
+            size: 21,
           ),
         ),
       ],
@@ -355,6 +526,8 @@ class _CollectionScreenState extends State<CollectionScreen> {
         final coverWidth =
             (constraints.maxWidth * 0.27).clamp(70.0, 100.0);
 
+        final status = book['status']?.toString() ?? 'Menunggu';
+
         return Container(
           constraints: const BoxConstraints(minHeight: 132),
           padding: const EdgeInsets.all(12),
@@ -370,25 +543,10 @@ class _CollectionScreenState extends State<CollectionScreen> {
                 child: SizedBox(
                   width: coverWidth,
                   height: 106,
-                  child: Image.asset(
-                    book['asset'] as String,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: book['color'] as Color,
-                        child: Icon(
-                          book['icon'] as IconData,
-                          color: AppColors.yellow,
-                          size: 31,
-                        ),
-                      );
-                    },
-                  ),
+                  child: _buildBookCover(book),
                 ),
               ),
-
               const SizedBox(width: 11),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,14 +557,14 @@ class _CollectionScreenState extends State<CollectionScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            book['title'] as String,
+                            book['title']?.toString() ?? 'Tanpa Judul',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: AppColors.navy,
                               fontSize: 10.5,
                               height: 1.25,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -418,11 +576,10 @@ class _CollectionScreenState extends State<CollectionScreen> {
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 3),
-
                     Text(
-                      book['author'] as String,
+                      book['author']?.toString() ??
+                          'Penulis tidak diketahui',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -430,35 +587,32 @@ class _CollectionScreenState extends State<CollectionScreen> {
                         fontSize: 9.5,
                       ),
                     ),
-
                     const SizedBox(height: 10),
-
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
+                          horizontal: 7,
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.yellow,
+                          color: _statusColor(status)
+                              .withOpacity(0.16),
                           borderRadius: BorderRadius.circular(5),
                         ),
                         child: Text(
-                          book['status'] as String,
-                          style: const TextStyle(
-                            color: AppColors.white,
+                          status,
+                          style: TextStyle(
+                            color: _statusColor(status),
                             fontSize: 8,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 11),
-
                     Text(
-                      'Jatuh Tempo: ${book['dueDate']}',
+                      'Jatuh Tempo: ${_formatDate(book['due_date'])}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -476,71 +630,110 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
   }
 
+  // BOOK COVER DARI SUPABASE STORAGE / URL
+  Widget _buildBookCover(Map<String, dynamic> book) {
+    final coverUrl = book['cover_url']?.toString() ?? '';
+
+    if (coverUrl.isEmpty) {
+      return _buildCoverPlaceholder();
+    }
+
+    return Image.network(
+      coverUrl,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      errorBuilder: (context, error, stackTrace) {
+        return _buildCoverPlaceholder();
+      },
+    );
+  }
+
+  Widget _buildCoverPlaceholder() {
+    return Container(
+      color: AppColors.cream,
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.menu_book_rounded,
+        color: AppColors.navy,
+        size: 31,
+      ),
+    );
+  }
+
   // PAGINATION
   Widget _buildPagination() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
       children: [
-        IconButton(
-          onPressed: currentPage > 0
-              ? () => _changePage(currentPage - 1)
-              : null,
-          icon: const Icon(
-            Icons.chevron_left_rounded,
-            size: 25,
+        Text(
+          'Halaman ${currentPage + 1} dari $totalPages',
+          style: TextStyle(
+            color: AppColors.white.withOpacity(0.8),
+            fontSize: 10,
           ),
-          color: AppColors.white,
-          disabledColor: AppColors.grey.withOpacity(0.4),
         ),
-
-        const SizedBox(width: 8),
-
-        ...List.generate(totalPages, (index) {
-          final isSelected = currentPage == index;
-
-          return GestureDetector(
-            onTap: () => _changePage(index),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              width: 29,
-              height: 29,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.white
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: AppColors.white,
-                ),
+        const SizedBox(height: 9),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              onPressed: currentPage > 0
+                  ? () => _changePage(currentPage - 1)
+                  : null,
+              icon: const Icon(
+                Icons.chevron_left_rounded,
+                size: 25,
               ),
-              child: Text(
-                '${index + 1}',
-                style: TextStyle(
-                  color: isSelected
-                      ? AppColors.navy
-                      : AppColors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              color: AppColors.white,
+              disabledColor: AppColors.grey.withOpacity(0.4),
             ),
-          );
-        }),
+            const SizedBox(width: 8),
+            ...List.generate(totalPages, (index) {
+              final isSelected = currentPage == index;
 
-        const SizedBox(width: 8),
-
-        IconButton(
-          onPressed: currentPage < totalPages - 1
-              ? () => _changePage(currentPage + 1)
-              : null,
-          icon: const Icon(
-            Icons.chevron_right_rounded,
-            size: 25,
-          ),
-          color: AppColors.white,
-          disabledColor: AppColors.grey.withOpacity(0.4),
+              return GestureDetector(
+                onTap: () => _changePage(index),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: 29,
+                  height: 29,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.white
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.white,
+                    ),
+                  ),
+                  child: Text(
+                    '${index + 1}',
+                    style: TextStyle(
+                      color: isSelected
+                          ? AppColors.navy
+                          : AppColors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: currentPage < totalPages - 1
+                  ? () => _changePage(currentPage + 1)
+                  : null,
+              icon: const Icon(
+                Icons.chevron_right_rounded,
+                size: 25,
+              ),
+              color: AppColors.white,
+              disabledColor: AppColors.grey.withOpacity(0.4),
+            ),
+          ],
         ),
       ],
     );
@@ -554,32 +747,82 @@ class _CollectionScreenState extends State<CollectionScreen> {
         color: AppColors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Column(
+      child: Column(
         children: [
-          Icon(
-            Icons.search_off_rounded,
+          const Icon(
+            Icons.menu_book_rounded,
             color: AppColors.grey,
-            size: 30,
+            size: 32,
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
-            'Koleksi tidak ditemukan',
-            style: TextStyle(
+            searchQuery.isNotEmpty
+                ? 'Koleksi tidak ditemukan'
+                : 'Belum ada koleksi',
+            style: const TextStyle(
               color: AppColors.navy,
               fontWeight: FontWeight.w700,
               fontSize: 12,
             ),
           ),
-          SizedBox(height: 4),
+          const SizedBox(height: 4),
           Text(
-            'Coba judul atau nama penulis lain.',
+            searchQuery.isNotEmpty
+                ? 'Coba judul atau nama penulis lain.'
+                : 'Buku yang kamu pinjam akan muncul di sini.',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               color: AppColors.grey,
               fontSize: 10,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ERROR STATE
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(25),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.wifi_off_rounded,
+              color: AppColors.white,
+              size: 35,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Gagal memuat koleksi',
+              style: TextStyle(
+                color: AppColors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              errorMessage ?? 'Terjadi kesalahan.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.white.withOpacity(0.75),
+                fontSize: 10,
+              ),
+            ),
+            const SizedBox(height: 14),
+            ElevatedButton(
+              onPressed: loadCollection,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.white,
+                foregroundColor: AppColors.navy,
+              ),
+              child: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
       ),
     );
   }

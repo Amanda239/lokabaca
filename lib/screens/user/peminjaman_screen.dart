@@ -1,4 +1,6 @@
+
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
 import 'user_bottom_navigation.dart';
@@ -7,42 +9,6 @@ import 'searchpage_screen.dart';
 import 'collection_screen.dart';
 import 'profile_screen.dart';
 import 'denda_screen.dart';
-
-// =====================================================
-// HALAMAN RIWAYAT PEMINJAMAN (USER)
-// Mengikuti desain Figma "Riwayat Peminjaman":
-//   header + tombol Dipinjam / Denda / Selesai + daftar buku.
-// =====================================================
-
-enum LoanStatus { dipinjam, selesai, terlambat }
-
-class LoanItem {
-  final String title;
-  final String author;
-  final String cover;
-  final DateTime borrowDate;
-
-  // Batas kembali (untuk Dipinjam / Terlambat)
-  // atau tanggal dikembalikan (untuk Selesai).
-  final DateTime endDate;
-
-  final LoanStatus status;
-
-  // Untuk buku Selesai yang dikembalikan melewati batas waktu.
-  final bool returnedLate;
-
-  const LoanItem({
-    required this.title,
-    required this.author,
-    required this.cover,
-    required this.borrowDate,
-    required this.endDate,
-    required this.status,
-    this.returnedLate = false,
-  });
-
-  bool get isLate => status == LoanStatus.terlambat || returnedLate;
-}
 
 class PeminjamanScreen extends StatefulWidget {
   final Map<String, dynamic>? selectedBook;
@@ -53,96 +19,375 @@ class PeminjamanScreen extends StatefulWidget {
   });
 
   @override
-  State<PeminjamanScreen> createState() => _PeminjamanScreenState();
+  State<PeminjamanScreen> createState() =>
+      _PeminjamanScreenState();
 }
 
 class _PeminjamanScreenState extends State<PeminjamanScreen> {
-  static const Color _darkText = Color(0xFF1E2A38);
-  static const Color _authorText = Color(0xFF555555);
-  static const Color _dateText = Color(0xFF6B6B6B);
+  static const Color navy = Color(0xFF2E4057);
+  static const Color cream = Color(0xFFF8F4EA);
+  static const Color muted = Color(0xFF8993A1);
+  static const Color dividerColor = Color(0xFFE9E9E9);
+
+  final supabase = Supabase.instance.client;
 
   int selectedNav = 2;
+  int selectedFilter = 0;
 
-  // Filter: null = tampilkan semua, atau Dipinjam / Selesai.
-  // Tekan tombol yang sama sekali lagi untuk menampilkan semua.
-  LoanStatus? selectedFilter;
+  bool isLoading = true;
+  String? errorMessage;
 
-  // DATA CONTOH (sama seperti desain Figma)
-  // TODO: ganti dengan data dari Supabase.
-  final List<LoanItem> loans = [
-    LoanItem(
-      title: 'Laut Bercerita',
-      author: 'Leila S. Chudori',
-      cover: 'assets/images/lautbercerita.jpeg',
-      borrowDate: DateTime(2026, 3, 9),
-      endDate: DateTime(2026, 3, 17),
-      status: LoanStatus.dipinjam,
-    ),
-    LoanItem(
-      title: 'Bawang Merah',
-      author: 'Yudhistira Ikranegara',
-      cover: 'assets/images/bawangmerah.jpeg',
-      borrowDate: DateTime(2026, 6, 2),
-      endDate: DateTime(2026, 8, 28),
-      status: LoanStatus.selesai,
-    ),
-    LoanItem(
-      title: 'Bahasa Indonesia',
-      author: 'Kurikulum Merdeka kelas 12',
-      cover: 'assets/images/bindo.jpeg',
-      borrowDate: DateTime(2026, 8, 1),
-      endDate: DateTime(2026, 9, 8),
-      status: LoanStatus.terlambat,
-    ),
-    LoanItem(
-      title: 'Rumah Alie',
-      author: 'Lenn Liu',
-      cover: 'assets/images/rumahuntukalie.jpeg',
-      borrowDate: DateTime(2026, 9, 6),
-      endDate: DateTime(2026, 10, 17),
-      status: LoanStatus.selesai,
-    ),
+  List<Map<String, dynamic>> borrowings = [];
+
+  final List<String> filters = [
+    'Dipinjam',
+    'Denda',
+    'Selesai',
   ];
 
   @override
   void initState() {
     super.initState();
+    loadBorrowings();
+  }
 
-    // Buku yang baru dipinjam dari form peminjaman
-    // ditambahkan di urutan paling atas.
-    final book = widget.selectedBook;
+  // =====================================================
+  // LOAD DATA PEMINJAMAN USER
+  // =====================================================
 
-    if (book != null) {
-      final today = DateUtils.dateOnly(DateTime.now());
+  Future<void> loadBorrowings() async {
+    if (!mounted) return;
 
-      loans.insert(
-        0,
-        LoanItem(
-          title: (book['title'] ?? 'Judul Buku').toString(),
-          author: (book['author'] ?? 'Penulis').toString(),
-          cover: (book['cover'] ?? '').toString(),
-          borrowDate: today,
-          endDate: today.add(const Duration(days: 14)),
-          status: LoanStatus.dipinjam,
-        ),
-      );
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      final user = supabase.auth.currentUser;
+
+      if (user == null) {
+        throw Exception('Silakan login terlebih dahulu.');
+      }
+
+      final response = await supabase
+          .from('borrowings')
+          .select()
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+
+      final transactions =
+          List<Map<String, dynamic>>.from(response);
+
+      final bookIds = transactions
+          .map((item) => item['book_id'])
+          .where((id) => id != null)
+          .toSet()
+          .toList();
+
+      List<Map<String, dynamic>> books = [];
+
+      if (bookIds.isNotEmpty) {
+        final bookResponse = await supabase
+            .from('books')
+            .select()
+            .inFilter('id', bookIds);
+
+        books = List<Map<String, dynamic>>.from(
+          bookResponse,
+        );
+      }
+
+      final bookMap = {
+        for (final book in books)
+          book['id'].toString(): book,
+      };
+
+      final combined = transactions.map((item) {
+        final bookId = item['book_id']?.toString();
+
+        return {
+          ...item,
+          '_book': bookMap[bookId],
+        };
+      }).toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        borrowings = combined;
+        isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+        errorMessage = e.toString();
+      });
     }
   }
 
-  // Tombol "Dipinjam" menampilkan buku yang masih dipinjam
-  // (termasuk yang sudah terlambat dikembalikan).
-  List<LoanItem> get visibleLoans {
+  // =====================================================
+  // HELPER
+  // =====================================================
+
+  String valueOf(
+    Map<String, dynamic>? data,
+    List<String> keys, {
+    String fallback = '-',
+  }) {
+    if (data == null) return fallback;
+
+    for (final key in keys) {
+      final value = data[key];
+
+      if (value != null &&
+          value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+
+    return fallback;
+  }
+
+  DateTime? parseDate(dynamic value) {
+    if (value == null) return null;
+
+    return DateTime.tryParse(value.toString())?.toLocal();
+  }
+
+  String formatDate(dynamic value) {
+    final date = parseDate(value);
+
+    if (date == null) return '-';
+
+    const months = [
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
+    ];
+
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  String formatRupiah(dynamic value) {
+    final amount = num.tryParse(value?.toString() ?? '') ?? 0;
+
+    final digits = amount.toInt().toString();
+    final buffer = StringBuffer();
+
+    for (int i = 0; i < digits.length; i++) {
+      buffer.write(digits[i]);
+
+      final remaining = digits.length - i - 1;
+
+      if (remaining > 0 && remaining % 3 == 0) {
+        buffer.write('.');
+      }
+    }
+
+    return 'Rp${buffer.toString()}';
+  }
+
+  String normalizeStatus(dynamic value) {
+    return (value ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+  }
+
+  // =====================================================
+  // STATUS DAN KATEGORI
+  // =====================================================
+
+  bool isReturned(Map<String, dynamic> item) {
+    final status = normalizeStatus(item['status']);
+
+    return [
+      'dikembalikan',
+      'returned',
+      'selesai',
+    ].contains(status);
+  }
+
+  bool isRejected(Map<String, dynamic> item) {
+    return normalizeStatus(item['status']) == 'ditolak';
+  }
+
+  bool isActive(Map<String, dynamic> item) {
+    final status = normalizeStatus(item['status']);
+
+    return [
+      'menunggu',
+      'dipinjam',
+      'borrowed',
+      'aktif',
+      'menunggu pengembalian',
+    ].contains(status);
+  }
+
+  bool isOverdue(Map<String, dynamic> item) {
+    if (isReturned(item) || isRejected(item)) {
+      return false;
+    }
+
+    final status = normalizeStatus(item['status']);
+
+    if (![
+      'dipinjam',
+      'borrowed',
+      'aktif',
+      'menunggu pengembalian',
+    ].contains(status)) {
+      return false;
+    }
+
+    final dueDate = parseDate(item['due_date']);
+
+    if (dueDate == null) return false;
+
+    final today = DateUtils.dateOnly(DateTime.now());
+    final due = DateUtils.dateOnly(dueDate);
+
+    return due.isBefore(today);
+  }
+
+  bool hasFine(Map<String, dynamic> item) {
+    final fineAmount =
+        num.tryParse(item['fine_amount']?.toString() ?? '') ?? 0;
+
+    return fineAmount > 0;
+  }
+
+  bool isUnpaidFine(Map<String, dynamic> item) {
+    return hasFine(item) && item['fine_paid'] != true;
+  }
+
+  String getStatus(Map<String, dynamic> item) {
+    final status = normalizeStatus(item['status']);
+
+    if (status == 'menunggu') return 'Menunggu';
+
+    if (status == 'ditolak') return 'Ditolak';
+
+    if (status == 'menunggu pengembalian') {
+      return 'Menunggu Pengembalian';
+    }
+
+    if (isReturned(item)) return 'Selesai';
+
+    if (isOverdue(item)) return 'Terlambat';
+
+    if ([
+      'dipinjam',
+      'borrowed',
+      'aktif',
+    ].contains(status)) {
+      return 'Dipinjam';
+    }
+
+    return status.isEmpty ? 'Tidak diketahui' : status;
+  }
+
+  // =====================================================
+  // FILTER DATA
+  // =====================================================
+
+  List<Map<String, dynamic>> get visibleBorrowings {
     switch (selectedFilter) {
-      case LoanStatus.dipinjam:
-        return loans
-            .where((l) => l.status != LoanStatus.selesai)
-            .toList();
-      case LoanStatus.selesai:
-        return loans
-            .where((l) => l.status == LoanStatus.selesai)
-            .toList();
+      case 0:
+        return borrowings.where((item) {
+          return isActive(item);
+        }).toList();
+
+      case 1:
+        return borrowings.where((item) {
+          return isUnpaidFine(item);
+        }).toList();
+
+      case 2:
+        return borrowings.where((item) {
+          return isReturned(item);
+        }).toList();
+
       default:
-        return loans;
+        return borrowings;
+    }
+  }
+
+  int getFilterCount(int index) {
+    switch (index) {
+      case 0:
+        return borrowings.where(isActive).length;
+
+      case 1:
+        return borrowings.where(isUnpaidFine).length;
+
+      case 2:
+        return borrowings.where(isReturned).length;
+
+      default:
+        return 0;
+    }
+  }
+
+  // =====================================================
+  // WARNA STATUS
+  // =====================================================
+
+  Color statusBackground(String status) {
+    switch (status) {
+      case 'Menunggu':
+        return const Color(0xFFFFE9B9);
+
+      case 'Ditolak':
+      case 'Terlambat':
+        return const Color(0xFFFFE0E0);
+
+      case 'Dipinjam':
+        return const Color(0xFFDDE8F6);
+
+      case 'Menunggu Pengembalian':
+        return const Color(0xFFECE3F7);
+
+      case 'Selesai':
+        return const Color(0xFFDCEFE3);
+
+      default:
+        return cream;
+    }
+  }
+
+  Color statusForeground(String status) {
+    switch (status) {
+      case 'Menunggu':
+        return const Color(0xFF85601D);
+
+      case 'Ditolak':
+      case 'Terlambat':
+        return const Color(0xFF9B3636);
+
+      case 'Dipinjam':
+        return const Color(0xFF355D8C);
+
+      case 'Menunggu Pengembalian':
+        return const Color(0xFF715393);
+
+      case 'Selesai':
+        return const Color(0xFF356A4D);
+
+      default:
+        return navy;
     }
   }
 
@@ -152,29 +397,25 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final list = visibleLoans;
-
     return Scaffold(
       backgroundColor: AppColors.white,
       body: SafeArea(
         bottom: false,
-        child: ListView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+        child: Column(
           children: [
             _buildHeader(),
-            const SizedBox(height: 26),
-            _buildFilterButtons(),
-            const SizedBox(height: 28),
-            if (list.isEmpty)
-              _buildEmptyState()
-            else
-              ...list.map(
-                (loan) => Padding(
-                  padding: const EdgeInsets.only(bottom: 28),
-                  child: _buildLoanItem(loan),
-                ),
-              ),
+
+            Expanded(
+              child: isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: navy,
+                      ),
+                    )
+                  : errorMessage != null
+                      ? _buildError()
+                      : _buildContent(),
+            ),
           ],
         ),
       ),
@@ -186,156 +427,283 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
   }
 
   // =====================================================
-  // HEADER "< Riwayat Peminjaman"
+  // HEADER
   // =====================================================
 
   Widget _buildHeader() {
-    return Row(
-      children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: _goBack,
-          child: const Padding(
-            padding: EdgeInsets.all(4),
-            child: Icon(
-              Icons.chevron_left_rounded,
-              color: AppColors.navy,
-              size: 32,
-            ),
-          ),
-        ),
-        const SizedBox(width: 14),
-        const Expanded(
-          child: Text(
-            'Riwayat Peminjaman',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.navy,
-              fontSize: 19,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // =====================================================
-  // TOMBOL "Dipinjam" | "Denda" | "Selesai"
-  // =====================================================
-
-  Widget _buildFilterButtons() {
-    // Ketiga tombol dibuat sama lebar (Expanded).
-    return Row(
-      children: [
-        Expanded(
-          child: _buildPill(
-            label: 'Dipinjam',
-            active: selectedFilter == LoanStatus.dipinjam,
-            onTap: () => _toggleFilter(LoanStatus.dipinjam),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildPill(
-            label: 'Denda',
-            active: false,
-            onTap: _openDenda,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildPill(
-            label: 'Selesai',
-            active: selectedFilter == LoanStatus.selesai,
-            onTap: () => _toggleFilter(LoanStatus.selesai),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPill({
-    required String label,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x40000000),
-            blurRadius: 4,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Material(
-        color: active ? AppColors.yellow : AppColors.navy,
-        borderRadius: BorderRadius.circular(30),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(30),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 11,
-            ),
-            child: Center(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: active ? AppColors.navy : AppColors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 10),
+      child: Row(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(30),
+            onTap: _goBack,
+            child: const Padding(
+              padding: EdgeInsets.all(5),
+              child: Icon(
+                Icons.chevron_left_rounded,
+                color: navy,
+                size: 29,
               ),
             ),
           ),
+
+          const SizedBox(width: 10),
+
+          const Expanded(
+            child: Text(
+              'Riwayat Peminjaman',
+              style: TextStyle(
+                color: navy,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+              ),
+            ),
+          ),
+
+          IconButton(
+            onPressed: loadBorrowings,
+            tooltip: 'Muat ulang',
+            icon: const Icon(
+              Icons.refresh_rounded,
+              color: navy,
+              size: 21,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // CONTENT
+  // =====================================================
+
+  Widget _buildContent() {
+    final data = visibleBorrowings;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 15),
+
+        _buildFilterButtons(),
+
+        const SizedBox(height: 23),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          child: Row(
+            children: [
+              Text(
+                selectedFilter == 0
+                    ? 'Buku yang sedang dipinjam'
+                    : selectedFilter == 1
+                        ? 'Riwayat denda'
+                        : 'Buku yang telah dikembalikan',
+                style: const TextStyle(
+                  color: navy,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+
+              const Spacer(),
+
+              Text(
+                '${data.length} buku',
+                style: const TextStyle(
+                  color: muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        Expanded(
+          child: RefreshIndicator(
+            color: navy,
+            onRefresh: loadBorrowings,
+            child: data.isEmpty
+                ? _buildEmptyState()
+                : ListView.separated(
+                    physics:
+                        const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(
+                      22,
+                      7,
+                      22,
+                      25,
+                    ),
+                    itemCount: data.length,
+                    separatorBuilder: (_, __) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(
+                          vertical: 17,
+                        ),
+                        child: Divider(
+                          height: 1,
+                          thickness: 0.7,
+                          color: dividerColor,
+                        ),
+                      );
+                    },
+                    itemBuilder: (context, index) {
+                      return _buildLoanItem(data[index]);
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // =====================================================
+  // FILTER BUTTONS
+  // =====================================================
+
+  Widget _buildFilterButtons() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      child: Row(
+        children: List.generate(filters.length, (index) {
+          final active = selectedFilter == index;
+          final count = getFilterCount(index);
+
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: index == filters.length - 1 ? 0 : 10,
+              ),
+              child: _buildFilterButton(
+                label: filters[index],
+                count: count,
+                active: active,
+                onTap: () {
+                  if (index == 1) {
+                    _openDenda();
+                  } else {
+                    setState(() {
+                      selectedFilter = index;
+                    });
+                  }
+                },
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildFilterButton({
+    required String label,
+    required int count,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: active ? const Color(0xFFF4C95D) : navy,
+      borderRadius: BorderRadius.circular(30),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(30),
+        onTap: onTap,
+        child: Container(
+          height: 43,
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          alignment: Alignment.center,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: active ? navy : Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+
+                const SizedBox(width: 5),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: active
+                        ? navy.withOpacity(0.10)
+                        : Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    count.toString(),
+                    style: TextStyle(
+                      color: active ? navy : Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  void _toggleFilter(LoanStatus status) {
-    setState(() {
-      selectedFilter = selectedFilter == status ? null : status;
-    });
-  }
-
   // =====================================================
-  // ITEM BUKU
+  // ITEM PEMINJAMAN
   // =====================================================
 
-  Widget _buildLoanItem(LoanItem loan) {
+  Widget _buildLoanItem(Map<String, dynamic> item) {
+    final book = item['_book'] as Map<String, dynamic>?;
+
+    final title = valueOf(
+      book,
+      ['title', 'judul'],
+      fallback: 'Judul tidak tersedia',
+    );
+
+    final author = valueOf(
+      book,
+      ['author', 'penulis'],
+    );
+
+    final cover = valueOf(
+      book,
+      ['cover_url', 'cover', 'image_url'],
+      fallback: '',
+    );
+
+    final status = getStatus(item);
+
+    final borrowedDate = item['borrowed_at'] ??
+        item['created_at'];
+
+    final dueDate = item['due_date'];
+
+    final fineAmount =
+        num.tryParse(item['fine_amount']?.toString() ?? '') ?? 0;
+
+    final returnedAt = item['returned_at'];
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // COVER BUKU
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: Image.asset(
-            loan.cover,
-            width: 60,
-            height: 86,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              width: 60,
-              height: 86,
-              color: AppColors.border,
-              child: const Icon(
-                Icons.menu_book_rounded,
-                color: AppColors.navy,
-              ),
-            ),
-          ),
-        ),
+        _buildBookCover(cover),
 
-        const SizedBox(width: 16),
+        const SizedBox(width: 15),
 
         // INFORMASI BUKU
         Expanded(
@@ -346,55 +714,103 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        loan.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: navy,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        height: 1.35,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  _buildStatusBadge(loan.status),
+
+                  const SizedBox(width: 7),
+
+                  _buildStatusBadge(status),
                 ],
               ),
-              const SizedBox(height: 2),
+
+              const SizedBox(height: 4),
+
               Text(
-                loan.author,
-                maxLines: 2,
+                author,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  color: _authorText,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF777777),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 3),
-              Text(
-                loan.isLate ? 'Terlambat' : 'Tepat waktu',
-                style: TextStyle(
-                  color: loan.isLate
-                      ? const Color(0xFFFF0000)
-                      : _dateText,
-                  fontSize: 12.5,
-                ),
+
+              const SizedBox(height: 12),
+
+              _buildDateInfo(
+                icon: Icons.calendar_today_outlined,
+                label: 'Tanggal pinjam',
+                value: formatDate(borrowedDate),
               ),
-              const SizedBox(height: 11),
-              Text(
-                '${_formatDate(loan.borrowDate)} - '
-                '${_formatDate(loan.endDate)}',
-                style: const TextStyle(
-                  color: _dateText,
-                  fontSize: 12,
-                  height: 1.3,
+
+              const SizedBox(height: 5),
+
+              if (isReturned(item))
+                _buildDateInfo(
+                  icon: Icons.event_available_outlined,
+                  label: 'Dikembalikan',
+                  value: formatDate(returnedAt),
+                )
+              else
+                _buildDateInfo(
+                  icon: Icons.event_outlined,
+                  label: 'Batas pengembalian',
+                  value: formatDate(dueDate),
                 ),
-              ),
+
+              if (fineAmount > 0) ...[
+                const SizedBox(height: 9),
+
+                Row(
+                  children: [
+                    Icon(
+                      Icons.receipt_long_outlined,
+                      size: 13,
+                      color: isUnpaidFine(item)
+                          ? const Color(0xFFB64B4B)
+                          : const Color(0xFF43805B),
+                    ),
+
+                    const SizedBox(width: 5),
+
+                    Text(
+                      'Denda: ${formatRupiah(fineAmount)}',
+                      style: TextStyle(
+                        color: isUnpaidFine(item)
+                            ? const Color(0xFFB64B4B)
+                            : const Color(0xFF43805B),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+
+                    const SizedBox(width: 5),
+
+                    Text(
+                      item['fine_paid'] == true
+                          ? '(Lunas)'
+                          : '(Belum dibayar)',
+                      style: TextStyle(
+                        color: isUnpaidFine(item)
+                            ? const Color(0xFFB64B4B)
+                            : const Color(0xFF43805B),
+                        fontSize: 9,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -402,39 +818,113 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     );
   }
 
-  Widget _buildStatusBadge(LoanStatus status) {
-    late final String label;
-    late final Color background;
+  // =====================================================
+  // COVER BUKU
+  // =====================================================
 
-    switch (status) {
-      case LoanStatus.dipinjam:
-        label = 'Dipinjam';
-        background = const Color(0xFFF5C85F);
-        break;
-      case LoanStatus.selesai:
-        label = 'Selesai';
-        background = const Color(0xFF53E044);
-        break;
-      case LoanStatus.terlambat:
-        label = 'Terlambat';
-        background = const Color(0xFFF25555);
-        break;
-    }
-
+  Widget _buildBookCover(String url) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      width: 66,
+      height: 94,
       decoration: BoxDecoration(
-        color: background,
+        color: cream,
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: navy.withOpacity(0.08),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: url.isNotEmpty
+          ? Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) {
+                return _coverFallback();
+              },
+            )
+          : _coverFallback(),
+    );
+  }
+
+  Widget _coverFallback() {
+    return const Center(
+      child: Icon(
+        Icons.menu_book_rounded,
+        color: navy,
+        size: 28,
+      ),
+    );
+  }
+
+  // =====================================================
+  // STATUS BADGE
+  // =====================================================
+
+  Widget _buildStatusBadge(String status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 7,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: statusBackground(status),
         borderRadius: BorderRadius.circular(5),
       ),
       child: Text(
-        label,
-        style: const TextStyle(
-          color: _darkText,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
+        status,
+        style: TextStyle(
+          color: statusForeground(status),
+          fontSize: 8.5,
+          fontWeight: FontWeight.w800,
         ),
       ),
+    );
+  }
+
+  // =====================================================
+  // DATE INFO
+  // =====================================================
+
+  Widget _buildDateInfo({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 12,
+          color: muted,
+        ),
+
+        const SizedBox(width: 5),
+
+        Text(
+          '$label: ',
+          style: const TextStyle(
+            color: muted,
+            fontSize: 9.5,
+          ),
+        ),
+
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: navy,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -443,57 +933,143 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
   // =====================================================
 
   Widget _buildEmptyState() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
+    String title;
+    String description;
+    IconData icon;
+
+    switch (selectedFilter) {
+      case 0:
+        title = 'Tidak Ada Peminjaman';
+        description =
+            'Buku yang sedang kamu pinjam akan muncul di sini.';
+        icon = Icons.menu_book_outlined;
+        break;
+
+      case 1:
+        title = 'Tidak Ada Denda';
+        description =
+            'Kamu tidak memiliki tagihan denda yang belum dibayar.';
+        icon = Icons.receipt_long_outlined;
+        break;
+
+      case 2:
+        title = 'Belum Ada Buku Selesai';
+        description =
+            'Buku yang sudah dikembalikan akan muncul di sini.';
+        icon = Icons.library_books_outlined;
+        break;
+
+      default:
+        title = 'Belum Ada Riwayat';
+        description = 'Riwayat peminjamanmu akan muncul di sini.';
+        icon = Icons.menu_book_outlined;
+    }
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        const SizedBox(height: 105),
+
+        Center(
+          child: Container(
+            padding: const EdgeInsets.all(22),
             decoration: const BoxDecoration(
-              color: AppColors.cream,
+              color: cream,
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.menu_book_rounded,
-              color: AppColors.navy,
+            child: Icon(
+              icon,
+              color: navy,
               size: 38,
             ),
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'Belum Ada Riwayat',
-            style: TextStyle(
-              color: AppColors.navy,
-              fontWeight: FontWeight.w800,
+        ),
+
+        const SizedBox(height: 17),
+
+        Center(
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: navy,
               fontSize: 14,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 7),
-          const Text(
-            'Buku yang kamu pinjam akan muncul di sini.',
+        ),
+
+        const SizedBox(height: 7),
+
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 35),
+          child: Text(
+            description,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.grey,
+            style: const TextStyle(
+              color: muted,
               fontSize: 11,
+              height: 1.5,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   // =====================================================
-  // FORMAT TANGGAL  (contoh: 9 Maret 2026)
+  // ERROR STATE
   // =====================================================
 
-  String _formatDate(DateTime date) {
-    const months = [
-      'Januari', 'Februari', 'Maret', 'April',
-      'Mei', 'Juni', 'Juli', 'Agustus',
-      'September', 'Oktober', 'November', 'Desember',
-    ];
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(25),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.cloud_off_outlined,
+              color: navy,
+              size: 43,
+            ),
 
-    return '${date.day} ${months[date.month - 1]} ${date.year}';
+            const SizedBox(height: 14),
+
+            const Text(
+              'Gagal Memuat Riwayat',
+              style: TextStyle(
+                color: navy,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              errorMessage ?? 'Terjadi kesalahan.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: muted,
+                fontSize: 10,
+              ),
+            ),
+
+            const SizedBox(height: 17),
+
+            ElevatedButton.icon(
+              onPressed: loadBorrowings,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Coba Lagi'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // =====================================================
@@ -508,14 +1084,18 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      MaterialPageRoute(
+        builder: (_) => const DashboardScreen(),
+      ),
     );
   }
 
   void _openDenda() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const DendaScreen()),
+      MaterialPageRoute(
+        builder: (_) => const DendaScreen(),
+      ),
     );
   }
 
@@ -528,14 +1108,18 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
       case 0:
         destination = const DashboardScreen();
         break;
+
       case 1:
         destination = const SearchPageScreen();
         break;
+
       case 2:
         return;
+
       case 3:
         destination = const CollectionScreen();
         break;
+
       case 4:
         destination = const ProfileScreen();
         break;
@@ -545,7 +1129,9 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => destination!),
+      MaterialPageRoute(
+        builder: (_) => destination!,
+      ),
     );
   }
 }

@@ -32,18 +32,24 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
   }
 
   // ==========================================
-  // TOGGLE WISHLIST
+  // TOGGLE WISHLIST / KOLEKSI
   // ==========================================
 
   void _toggleFavorite() {
     WishlistStore.toggle(widget.book);
 
+    final isFavorite = WishlistStore.isFavorite(widget.book);
+
     _showMessage(
-      WishlistStore.isFavorite(widget.book)
-          ? 'Buku ditambahkan ke wishlist.'
-          : 'Buku dihapus dari wishlist.',
+      isFavorite
+          ? 'Buku ditambahkan ke koleksi.'
+          : 'Buku dihapus dari koleksi.',
     );
   }
+
+  // ==========================================
+  // BUILD
+  // ==========================================
 
   @override
   Widget build(BuildContext context) {
@@ -103,10 +109,8 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                               size: 21,
                             ),
                           ),
-
                           Row(
                             children: [
-                              // SHARE
                               IconButton(
                                 onPressed: () => _showMessage(
                                   'Fitur berbagi buku akan segera tersedia.',
@@ -118,7 +122,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                                 ),
                               ),
 
-                              // WISHLIST LOVE
+                              // TOMBOL FAVORITE
                               ValueListenableBuilder<
                                   List<Map<String, dynamic>>>(
                                 valueListenable: WishlistStore.books,
@@ -146,46 +150,75 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 12),
 
                     // =================================
                     // COVER BUKU
                     // =================================
 
                     Container(
-                      width: 148,
-                      height: 218,
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
+                        color: const Color(0xFFFAF5EB),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: const Color(0xFFECE4D5),
+                          width: 1,
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.20),
-                            blurRadius: 8,
-                            offset: const Offset(4, 7),
+                            color: AppColors.navy.withOpacity(0.08),
+                            blurRadius: 24,
+                            spreadRadius: 1,
+                            offset: const Offset(0, 10),
                           ),
                         ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.asset(
-                          cover,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) {
-                            return Container(
-                              color: book['color'] ??
-                                  const Color(0xFF356B82),
-                              child: const Icon(
-                                Icons.menu_book_rounded,
-                                color: Colors.white,
-                                size: 55,
-                              ),
-                            );
-                          },
+                      child: Container(
+                        width: 148,
+                        height: 218,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.9),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.24),
+                              blurRadius: 16,
+                              spreadRadius: 1,
+                              offset: const Offset(5, 9),
+                            ),
+                            BoxShadow(
+                              color: AppColors.navy.withOpacity(0.10),
+                              blurRadius: 5,
+                              offset: const Offset(-2, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(7),
+                          child: Image.asset(
+                            cover,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) {
+                              return Container(
+                                color: book['color'] ??
+                                    const Color(0xFF356B82),
+                                child: const Icon(
+                                  Icons.menu_book_rounded,
+                                  color: Colors.white,
+                                  size: 55,
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 45),
+                    const SizedBox(height: 30),
 
                     // =================================
                     // JUDUL DAN PENULIS
@@ -193,7 +226,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
+                        horizontal: 24,
                       ),
                       child: Column(
                         children: [
@@ -202,13 +235,12 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: AppColors.navy,
-                              fontSize: 20,
+                              fontSize: 21,
+                              height: 1.3,
                               fontWeight: FontWeight.w800,
                             ),
                           ),
-
-                          const SizedBox(height: 5),
-
+                          const SizedBox(height: 7),
                           Text(
                             author,
                             textAlign: TextAlign.center,
@@ -222,7 +254,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
 
                     // =================================
                     // RATING
@@ -230,20 +262,20 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 5,
+                        horizontal: 14,
+                        vertical: 7,
                       ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFFAF5EB),
                         borderRadius: BorderRadius.circular(25),
                         border: Border.all(
-                          color: const Color(0xFFD0C9BB),
+                          color: const Color(0xFFE6DDCC),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.12),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
+                            color: AppColors.navy.withOpacity(0.07),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
                           ),
                         ],
                       ),
@@ -253,11 +285,9 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                           const Icon(
                             Icons.star_rounded,
                             color: Color(0xFFFFC83D),
-                            size: 25,
+                            size: 23,
                           ),
-
-                          const SizedBox(width: 7),
-
+                          const SizedBox(width: 6),
                           Text(
                             '$rating',
                             style: const TextStyle(
@@ -266,9 +296,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                               fontSize: 13,
                             ),
                           ),
-
-                          const SizedBox(width: 8),
-
+                          const SizedBox(width: 7),
                           Text(
                             '($reviews)',
                             style: const TextStyle(
@@ -280,50 +308,48 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 20),
 
                     // =================================
                     // KATEGORI
                     // =================================
 
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 12,
-                      runSpacing: 8,
-                      children: List.generate(
-                        (tags as List).length,
-                        (index) => Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 17,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF3D27D),
-                            borderRadius: BorderRadius.circular(7),
-                            border: Border.all(
-                              color: const Color(0xFFD6B45E),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                      ),
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 9,
+                        children: List.generate(
+                          (tags as List).length,
+                          (index) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.12),
-                                blurRadius: 3,
-                                offset: const Offset(0, 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3D27D),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: const Color(0xFFD6B45E),
                               ),
-                            ],
-                          ),
-                          child: Text(
-                            tags[index].toString(),
-                            style: const TextStyle(
-                              color: AppColors.navy,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
+                            ),
+                            child: Text(
+                              tags[index].toString(),
+                              style: const TextStyle(
+                                color: AppColors.navy,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 23),
+                    const SizedBox(height: 26),
 
                     // =================================
                     // SINOPSIS
@@ -338,6 +364,16 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                       decoration: BoxDecoration(
                         color: const Color(0xFFFAF5EB),
                         borderRadius: BorderRadius.circular(17),
+                        border: Border.all(
+                          color: const Color(0xFFECE4D5),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.navy.withOpacity(0.05),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment:
@@ -350,12 +386,11 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                               const Text(
                                 'Sinopsis Buku',
                                 style: TextStyle(
-                                  color: Colors.black87,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.navy,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
-
                               IconButton(
                                 onPressed: () => _showMessage(
                                   'Informasi sinopsis buku.',
@@ -368,20 +403,19 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                               ),
                             ],
                           ),
-
                           Text(
                             synopsis,
                             style: const TextStyle(
                               color: AppColors.navy,
                               fontSize: 14,
-                              height: 1.5,
+                              height: 1.6,
                             ),
                           ),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
 
                     // =================================
                     // INFORMASI BUKU
@@ -389,33 +423,30 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                     Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
+                        horizontal: 24,
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildInfoRow(
-                            'Penerbit',
-                            publisher,
+                          const Text(
+                            'Informasi Buku',
+                            style: TextStyle(
+                              color: AppColors.navy,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-
-                          const SizedBox(height: 15),
-
-                          _buildInfoRow(
-                            'Tahun Terbit',
-                            '$year',
-                          ),
-
-                          const SizedBox(height: 15),
-
-                          _buildInfoRow(
-                            'Jumlah Halaman',
-                            '$pages',
-                          ),
+                          const SizedBox(height: 16),
+                          _buildInfoRow('Penerbit', publisher),
+                          const SizedBox(height: 16),
+                          _buildInfoRow('Tahun Terbit', '$year'),
+                          const SizedBox(height: 16),
+                          _buildInfoRow('Jumlah Halaman', '$pages'),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 28),
                   ],
                 ),
               ),
@@ -425,18 +456,28 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
             // TOMBOL BAWAH
             // =================================
 
-            Padding(
+            Container(
               padding: const EdgeInsets.fromLTRB(
-                14,
-                8,
-                14,
+                16,
                 12,
+                16,
+                12,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: SizedBox(
-                      height: 46,
+                      height: 48,
                       child: ElevatedButton(
                         onPressed: () {
                           Navigator.push(
@@ -452,15 +493,15 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.navy,
                           foregroundColor: Colors.white,
-                          elevation: 3,
+                          elevation: 2,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(11),
                           ),
                         ),
                         child: const Text(
                           'Ajukan Peminjaman',
                           style: TextStyle(
-                            fontSize: 15,
+                            fontSize: 14,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -470,15 +511,27 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                   const SizedBox(width: 12),
 
-                  _buildBottomIcon(
-                    Icons.bookmark_add_outlined,
-                    () => _showMessage(
-                      'Buku ditambahkan ke koleksi.',
-                    ),
+                  // TOMBOL KOLEKSI
+                  ValueListenableBuilder<
+                      List<Map<String, dynamic>>>(
+                    valueListenable: WishlistStore.books,
+                    builder: (context, books, child) {
+                      final isFavorite =
+                          WishlistStore.isFavorite(widget.book);
+
+                      return _buildBottomIcon(
+                        isFavorite
+                            ? Icons.bookmark_added_rounded
+                            : Icons.bookmark_add_outlined,
+                        _toggleFavorite,
+                        isActive: isFavorite,
+                      );
+                    },
                   ),
 
                   const SizedBox(width: 10),
 
+                  // TOMBOL ULASAN
                   _buildBottomIcon(
                     Icons.comment_rounded,
                     () {
@@ -517,11 +570,11 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
             style: const TextStyle(
               color: AppColors.navy,
               fontSize: 14,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
-
+        const SizedBox(width: 12),
         Expanded(
           flex: 7,
           child: Text(
@@ -543,21 +596,22 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
   Widget _buildBottomIcon(
     IconData icon,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    bool isActive = false,
+  }) {
     return SizedBox(
-      width: 52,
-      height: 44,
+      width: 48,
+      height: 46,
       child: Material(
         color: const Color(0xFFFAF5EB),
-        elevation: 2,
-        borderRadius: BorderRadius.circular(10),
+        elevation: 1,
+        borderRadius: BorderRadius.circular(11),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(11),
           child: Icon(
             icon,
-            color: AppColors.navy,
+            color: isActive ? const Color(0xFF4D9469) : AppColors.navy,
             size: 22,
           ),
         ),

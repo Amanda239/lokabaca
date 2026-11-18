@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -30,13 +31,17 @@ class _PeminjamanAdminScreenState
 
   bool isLoading = true;
   String? errorMessage;
+
   int selectedFilter = 0;
 
   final List<String> filters = [
     'Semua',
+    'Menunggu',
+    'Ditolak',
     'Dipinjam',
-    'Dikembalikan',
     'Terlambat',
+    'Pengembalian',
+    'Selesai',
   ];
 
   @override
@@ -164,6 +169,7 @@ class _PeminjamanAdminScreenState
 
   DateTime? parseDate(dynamic value) {
     if (value == null) return null;
+
     return DateTime.tryParse(value.toString());
   }
 
@@ -190,45 +196,72 @@ class _PeminjamanAdminScreenState
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
+  // =====================================================
+  // STATUS PEMINJAMAN
+  // =====================================================
+
   bool isOverdue(Map<String, dynamic> item) {
     final status = (item['status'] ?? '')
         .toString()
+        .trim()
         .toLowerCase();
 
-    if (!['dipinjam', 'borrowed', 'aktif'].contains(status)) {
+    if (![
+      'dipinjam',
+      'borrowed',
+      'aktif',
+    ].contains(status)) {
       return false;
     }
 
     final dueDate = parseDate(
-      item['due_date'] ?? item['tanggal_jatuh_tempo'],
+      item['due_date'] ??
+          item['tanggal_jatuh_tempo'],
     );
 
     if (dueDate == null) return false;
 
     final today = DateTime.now();
 
-    return DateTime(
+    final due = DateTime(
       dueDate.year,
       dueDate.month,
       dueDate.day,
-    ).isBefore(
-      DateTime(today.year, today.month, today.day),
     );
+
+    final now = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    );
+
+    return due.isBefore(now);
   }
 
   String getStatus(Map<String, dynamic> item) {
-    if (isOverdue(item)) return 'Terlambat';
-
     final status = (item['status'] ?? '')
         .toString()
+        .trim()
         .toLowerCase();
+
+    if (status == 'menunggu') {
+      return 'Menunggu';
+    }
+
+    if (status == 'ditolak') {
+      return 'Ditolak';
+    }
+
+    if (status == 'menunggu pengembalian') {
+      return 'Pengembalian';
+    }
 
     if ([
       'dikembalikan',
       'returned',
       'selesai',
     ].contains(status)) {
-      return 'Dikembalikan';
+      return 'Selesai';
     }
 
     if ([
@@ -236,17 +269,35 @@ class _PeminjamanAdminScreenState
       'borrowed',
       'aktif',
     ].contains(status)) {
+      if (isOverdue(item)) {
+        return 'Terlambat';
+      }
+
       return 'Dipinjam';
     }
 
-    return status.isEmpty ? 'Tidak diketahui' : status;
+    if (status == 'terlambat') {
+      return 'Terlambat';
+    }
+
+    return status.isEmpty
+        ? 'Tidak diketahui'
+        : status;
   }
 
+  // =====================================================
+  // FILTER DATA
+  // =====================================================
+
   List<Map<String, dynamic>> get filteredBorrowings {
-    if (selectedFilter == 0) return borrowings;
+    if (selectedFilter == 0) {
+      return borrowings;
+    }
+
+    final selectedStatus = filters[selectedFilter];
 
     return borrowings.where((item) {
-      return getStatus(item) == filters[selectedFilter];
+      return getStatus(item) == selectedStatus;
     }).toList();
   }
 
@@ -255,11 +306,92 @@ class _PeminjamanAdminScreenState
   // =====================================================
 
   int getFilterCount(int index) {
-    if (index == 0) return borrowings.length;
+    if (index == 0) {
+      return borrowings.length;
+    }
+
+    final selectedStatus = filters[index];
 
     return borrowings
-        .where((item) => getStatus(item) == filters[index])
+        .where(
+          (item) => getStatus(item) == selectedStatus,
+        )
         .length;
+  }
+
+  // =====================================================
+  // WARNA STATUS
+  // =====================================================
+
+  Color getStatusBackground(String status) {
+    switch (status) {
+      case 'Menunggu':
+        return const Color(0xFFFFE8B2);
+
+      case 'Ditolak':
+        return const Color(0xFFFFD6D6);
+
+      case 'Dipinjam':
+        return const Color(0xFFDCE8FA);
+
+      case 'Terlambat':
+        return const Color(0xFFFF858C);
+
+      case 'Pengembalian':
+        return const Color(0xFFE8DDF7);
+
+      case 'Selesai':
+        return const Color(0xFFB9E4CD);
+
+      default:
+        return cream;
+    }
+  }
+
+  Color getStatusForeground(String status) {
+    switch (status) {
+      case 'Menunggu':
+        return const Color(0xFF76551A);
+
+      case 'Ditolak':
+      case 'Terlambat':
+        return const Color(0xFF8F1F29);
+
+      case 'Dipinjam':
+        return const Color(0xFF315A91);
+
+      case 'Pengembalian':
+        return const Color(0xFF694A91);
+
+      case 'Selesai':
+        return const Color(0xFF315F46);
+
+      default:
+        return navy;
+    }
+  }
+
+  // =====================================================
+  // BUKA DETAIL PEMINJAMAN
+  // =====================================================
+
+  Future<void> openBorrowingDetail(
+    Map<String, dynamic> item,
+  ) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DetailPeminjamanScreen(
+          borrowingId: item['id'],
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result == true) {
+      await loadBorrowings();
+    }
   }
 
   // =====================================================
@@ -281,7 +413,6 @@ class _PeminjamanAdminScreenState
   // =====================================================
 
   void handleBottomNavigation(int index) {
-    // Sudah berada di halaman Peminjaman
     if (index == 3) return;
 
     late final Widget page;
@@ -407,7 +538,9 @@ class _PeminjamanAdminScreenState
         const SizedBox(height: 18),
 
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 18,
+          ),
           child: Row(
             children: [
               const Icon(
@@ -475,7 +608,9 @@ class _PeminjamanAdminScreenState
                     ),
                     itemCount: data.length,
                     itemBuilder: (context, index) {
-                      return _buildBorrowingCard(data[index]);
+                      return _buildBorrowingCard(
+                        data[index],
+                      );
                     },
                   ),
           ),
@@ -493,7 +628,9 @@ class _PeminjamanAdminScreenState
       height: 43,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+        ),
         physics: const BouncingScrollPhysics(),
         itemCount: filters.length,
         separatorBuilder: (_, __) =>
@@ -512,7 +649,9 @@ class _PeminjamanAdminScreenState
                 });
               },
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(
+                  milliseconds: 200,
+                ),
                 curve: Curves.easeInOut,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 15,
@@ -534,7 +673,9 @@ class _PeminjamanAdminScreenState
                     Text(
                       filters[index],
                       style: TextStyle(
-                        color: selected ? Colors.white : navy,
+                        color: selected
+                            ? Colors.white
+                            : navy,
                         fontSize: 10,
                         fontWeight: selected
                             ? FontWeight.w800
@@ -545,8 +686,9 @@ class _PeminjamanAdminScreenState
                     const SizedBox(width: 7),
 
                     AnimatedContainer(
-                      duration:
-                          const Duration(milliseconds: 200),
+                      duration: const Duration(
+                        milliseconds: 200,
+                      ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 6,
                         vertical: 2,
@@ -555,7 +697,8 @@ class _PeminjamanAdminScreenState
                         color: selected
                             ? Colors.white.withOpacity(0.18)
                             : const Color(0xFFE8E1D2),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius:
+                            BorderRadius.circular(12),
                       ),
                       child: Text(
                         count.toString(),
@@ -585,7 +728,9 @@ class _PeminjamanAdminScreenState
   Widget _buildBorrowingCard(
     Map<String, dynamic> item,
   ) {
-    final book = item['_book'] as Map<String, dynamic>?;
+    final book =
+        item['_book'] as Map<String, dynamic>?;
+
     final profile =
         item['_profile'] as Map<String, dynamic>?;
 
@@ -602,7 +747,12 @@ class _PeminjamanAdminScreenState
 
     final borrower = valueOf(
       profile,
-      ['full_name', 'name', 'nama_lengkap', 'username'],
+      [
+        'full_name',
+        'name',
+        'nama_lengkap',
+        'username',
+      ],
       fallback: 'Anggota tidak tersedia',
     );
 
@@ -619,32 +769,12 @@ class _PeminjamanAdminScreenState
 
     final status = getStatus(item);
 
-    final Color statusColor;
-    final Color statusTextColor;
-
-    if (status == 'Terlambat') {
-      statusColor = const Color(0xFFFF858C);
-      statusTextColor = const Color(0xFF8F1F29);
-    } else if (status == 'Dikembalikan') {
-      statusColor = const Color(0xFFB9E4CD);
-      statusTextColor = const Color(0xFF315F46);
-    } else {
-      statusColor = const Color(0xFFFFD15C);
-      statusTextColor = navy;
-    }
+    final statusColor = getStatusBackground(status);
+    final statusTextColor = getStatusForeground(status);
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DetailPeminjamanScreen(
-              borrowingId: item['id'],
-            ),
-          ),
-        );
-      },
+      onTap: () => openBorrowingDetail(item),
       child: Container(
         margin: const EdgeInsets.only(bottom: 11),
         padding: const EdgeInsets.all(10),

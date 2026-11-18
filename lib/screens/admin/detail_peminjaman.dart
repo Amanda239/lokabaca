@@ -27,6 +27,8 @@ class _DetailPeminjamanScreenState
   final supabase = Supabase.instance.client;
 
   bool isLoading = true;
+  bool isProcessing = false;
+
   String? errorMessage;
 
   Map<String, dynamic>? borrowing;
@@ -40,7 +42,7 @@ class _DetailPeminjamanScreenState
   }
 
   // =====================================================
-  // LOAD DETAIL TRANSAKSI DARI SUPABASE
+  // LOAD DETAIL TRANSAKSI
   // =====================================================
 
   Future<void> loadBorrowingDetail() async {
@@ -52,7 +54,6 @@ class _DetailPeminjamanScreenState
     });
 
     try {
-      // 1. Ambil transaksi peminjaman.
       final response = await supabase
           .from('borrowings')
           .select()
@@ -66,7 +67,6 @@ class _DetailPeminjamanScreenState
       final transaction =
           Map<String, dynamic>.from(response);
 
-      // 2. Ambil data buku berdasarkan book_id.
       Map<String, dynamic>? bookData;
 
       if (transaction['book_id'] != null) {
@@ -81,7 +81,6 @@ class _DetailPeminjamanScreenState
         }
       }
 
-      // 3. Ambil data anggota berdasarkan user_id/member_id.
       final userId = transaction['user_id'] ??
           transaction['member_id'];
 
@@ -118,6 +117,150 @@ class _DetailPeminjamanScreenState
   }
 
   // =====================================================
+  // PROCESS BORROWING
+  // =====================================================
+
+  Future<void> processBorrowing(String action) async {
+    if (isProcessing || borrowing == null) return;
+
+    String dialogTitle;
+    String dialogMessage;
+
+    switch (action) {
+      case 'approve':
+        dialogTitle = 'Setujui Peminjaman?';
+        dialogMessage =
+            'Apakah kamu yakin ingin menyetujui peminjaman ini? '
+            'Stok buku akan berkurang satu.';
+        break;
+
+      case 'reject':
+        dialogTitle = 'Tolak Peminjaman?';
+        dialogMessage =
+            'Apakah kamu yakin ingin menolak pengajuan peminjaman ini?';
+        break;
+
+      case 'confirm_return':
+        dialogTitle = 'Konfirmasi Pengembalian?';
+        dialogMessage =
+            'Apakah kamu yakin buku sudah dikembalikan? '
+            'Stok buku akan bertambah satu.';
+        break;
+
+      default:
+        return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            dialogTitle,
+            style: const TextStyle(
+              color: navy,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: Text(
+            dialogMessage,
+            style: const TextStyle(
+              color: muted,
+              fontSize: 12,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text(
+                'Batal',
+                style: TextStyle(
+                  color: muted,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text(
+                'Ya, Lanjutkan',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      isProcessing = true;
+    });
+
+    try {
+      await supabase.rpc(
+        'process_borrowing',
+        params: {
+          'p_borrowing_id': widget.borrowingId,
+          'p_action': action,
+        },
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            action == 'approve'
+                ? 'Peminjaman berhasil disetujui.'
+                : action == 'reject'
+                    ? 'Pengajuan berhasil ditolak.'
+                    : 'Pengembalian berhasil dikonfirmasi.',
+          ),
+          backgroundColor: const Color(0xFF315F46),
+        ),
+      );
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Gagal memproses transaksi: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isProcessing = false;
+        });
+      }
+    }
+  }
+
+  // =====================================================
   // HELPER
   // =====================================================
 
@@ -150,9 +293,18 @@ class _DetailPeminjamanScreenState
     if (date == null) return '-';
 
     const months = [
-      'Januari', 'Februari', 'Maret', 'April',
-      'Mei', 'Juni', 'Juli', 'Agustus',
-      'September', 'Oktober', 'November', 'Desember'
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
 
     return '${date.day} ${months[date.month - 1]} ${date.year}';
@@ -162,12 +314,17 @@ class _DetailPeminjamanScreenState
   // STATUS
   // =====================================================
 
+  String get rawStatus {
+    return (borrowing?['status'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+  }
+
   String get statusText {
     if (borrowing == null) return '-';
 
-    final status = (borrowing!['status'] ?? '')
-        .toString()
-        .toLowerCase();
+    final status = rawStatus;
 
     if (['dipinjam', 'borrowed', 'aktif'].contains(status)) {
       final dueDate = DateTime.tryParse(
@@ -200,8 +357,20 @@ class _DetailPeminjamanScreenState
       return 'Dipinjam';
     }
 
-    if (['dikembalikan', 'returned', 'selesai'].contains(status)) {
+    if ([
+      'dikembalikan',
+      'returned',
+      'selesai',
+    ].contains(status)) {
       return 'Dikembalikan';
+    }
+
+    if (status == 'menunggu') return 'Menunggu';
+
+    if (status == 'ditolak') return 'Ditolak';
+
+    if (status == 'menunggu pengembalian') {
+      return 'Menunggu Pengembalian';
     }
 
     if (status == 'terlambat') return 'Terlambat';
@@ -212,9 +381,15 @@ class _DetailPeminjamanScreenState
   Color get statusColor {
     switch (statusText) {
       case 'Terlambat':
+      case 'Ditolak':
         return const Color(0xFFFFD6D6);
+
       case 'Dikembalikan':
         return const Color(0xFFB9E4CD);
+
+      case 'Menunggu Pengembalian':
+        return const Color(0xFFDCE8FA);
+
       default:
         return const Color(0xFFFFD36A);
     }
@@ -223,12 +398,140 @@ class _DetailPeminjamanScreenState
   Color get statusTextColor {
     switch (statusText) {
       case 'Terlambat':
+      case 'Ditolak':
         return const Color(0xFFB83232);
+
       case 'Dikembalikan':
         return const Color(0xFF315F46);
+
+      case 'Menunggu Pengembalian':
+        return const Color(0xFF315A91);
+
       default:
         return const Color(0xFF76551A);
     }
+  }
+
+  // =====================================================
+  // ACTION BUTTONS
+  // =====================================================
+
+  Widget _buildActionButtons() {
+    if (rawStatus == 'menunggu') {
+      return Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: isProcessing
+                  ? null
+                  : () => processBorrowing('reject'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFB83232),
+                side: const BorderSide(
+                  color: Color(0xFFB83232),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+              ),
+              child: const Text(
+                'Tolak',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          Expanded(
+            child: ElevatedButton(
+              onPressed: isProcessing
+                  ? null
+                  : () => processBorrowing('approve'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: navy,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: muted,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                ),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+              ),
+              child: isProcessing
+                  ? const SizedBox(
+                      width: 17,
+                      height: 17,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text(
+                      'Setujui',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (rawStatus == 'menunggu pengembalian') {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: isProcessing
+              ? null
+              : () => processBorrowing('confirm_return'),
+          icon: isProcessing
+              ? const SizedBox(
+                  width: 17,
+                  height: 17,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : const Icon(
+                  Icons.assignment_turned_in_outlined,
+                  size: 18,
+                ),
+          label: const Text(
+            'Konfirmasi Pengembalian',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: navy,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: muted,
+            padding: const EdgeInsets.symmetric(
+              vertical: 14,
+            ),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(9),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   // =====================================================
@@ -385,7 +688,6 @@ class _DetailPeminjamanScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // INFORMASI BUKU
             _buildBookCard(
               cover: cover,
               title: title,
@@ -398,7 +700,6 @@ class _DetailPeminjamanScreenState
 
             const SizedBox(height: 27),
 
-            // INFORMASI ANGGOTA
             const Padding(
               padding: EdgeInsets.only(left: 7),
               child: Text(
@@ -421,7 +722,6 @@ class _DetailPeminjamanScreenState
 
             const SizedBox(height: 19),
 
-            // INFORMASI PEMINJAMAN
             const Padding(
               padding: EdgeInsets.only(left: 7),
               child: Text(
@@ -441,6 +741,13 @@ class _DetailPeminjamanScreenState
               dueDate: dueDate,
               returnedDate: returnedDate,
             ),
+
+            const SizedBox(height: 20),
+
+            // TOMBOL AKSI ADMIN
+            _buildActionButtons(),
+
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -550,7 +857,8 @@ class _DetailPeminjamanScreenState
           ? Image.network(
               url,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _coverPlaceholder(),
+              errorBuilder: (_, __, ___) =>
+                  _coverPlaceholder(),
             )
           : _coverPlaceholder(),
     );
@@ -879,7 +1187,10 @@ class _DetailPeminjamanScreenState
     if (index == 3) return;
 
     if (index == 0) {
-      Navigator.popUntil(context, (route) => route.isFirst);
+      Navigator.popUntil(
+        context,
+        (route) => route.isFirst,
+      );
       return;
     }
 

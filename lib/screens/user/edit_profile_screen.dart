@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -18,7 +19,6 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  // COLORS
   static const Color navy = Color(0xFF2E4057);
   static const Color cream = Color(0xFFF8F4EA);
   static const Color textColor = Color(0xFF304258);
@@ -34,20 +34,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController birthDateController = TextEditingController();
 
-  String? selectedGender;
-  String? avatarUrl;
-
-  Uint8List? selectedImageBytes;
-  String? selectedImageExtension;
-
-  bool isLoading = true;
-  bool isSaving = false;
-
   final List<String> genderOptions = [
     'Laki-laki',
     'Perempuan',
     'Campuran',
   ];
+
+  String? selectedGender;
+  String? avatarUrl;
+  Uint8List? selectedImageBytes;
+
+  bool isLoading = true;
+  bool isSaving = false;
 
   @override
   void initState() {
@@ -63,16 +61,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  // ==========================================
   // LOAD PROFILE
-  // ==========================================
 
   Future<void> loadProfile() async {
     final user = supabase.auth.currentUser;
 
     if (user == null) {
       if (!mounted) return;
-
       showMessage('Sesi login tidak ditemukan.');
       Navigator.pop(context);
       return;
@@ -92,14 +87,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       setState(() {
         nameController.text = data['full_name']?.toString() ?? '';
         phoneController.text = data['phone']?.toString() ?? '';
-
         birthDateController.text = _formatDate(
           data['birth_date']?.toString() ?? '',
         );
-
         selectedGender = data['gender']?.toString();
         avatarUrl = data['avatar_url']?.toString();
-
         isLoading = false;
       });
     } catch (e) {
@@ -110,17 +102,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       setState(() {
         nameController.text =
             widget.profile['full_name']?.toString() ?? '';
-
         phoneController.text =
             widget.profile['phone']?.toString() ?? '';
-
         birthDateController.text = _formatDate(
           widget.profile['birth_date']?.toString() ?? '',
         );
-
         selectedGender = widget.profile['gender']?.toString();
         avatarUrl = widget.profile['avatar_url']?.toString();
-
         isLoading = false;
       });
 
@@ -128,9 +116,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  // ==========================================
   // DATE FORMAT
-  // ==========================================
 
   String _formatDate(String date) {
     if (date.isEmpty) return '';
@@ -174,9 +160,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         '${day.toString().padLeft(2, '0')}';
   }
 
-  // ==========================================
   // SELECT BIRTH DATE
-  // ==========================================
 
   Future<void> selectBirthDate() async {
     DateTime initialDate = DateTime(2005);
@@ -229,17 +213,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  // ==========================================
-  // PICK PROFILE PHOTO
-  // Flutter Web & Android
-  // ==========================================
+  // PICK AND CROP PHOTO
 
   Future<void> pickProfilePhoto() async {
     try {
       final XFile? image = await picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 85,
-        maxWidth: 1200,
+        imageQuality: 95,
       );
 
       if (image == null) return;
@@ -251,15 +231,58 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         return;
       }
 
-      final bytes = await image.readAsBytes();
+      final CroppedFile? croppedImage =
+          await ImageCropper().cropImage(
+        sourcePath: image.path,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 90,
+        aspectRatio: const CropAspectRatio(
+          ratioX: 1,
+          ratioY: 1,
+        ),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Atur Foto Profil',
+            toolbarColor: navy,
+            toolbarWidgetColor: Colors.white,
+            backgroundColor: Colors.black,
+            activeControlsWidgetColor: yellow,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+            initAspectRatio: CropAspectRatioPreset.square,
+          ),
+          IOSUiSettings(
+            title: 'Atur Foto Profil',
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+            ],
+          ),
+          WebUiSettings(
+            context: context,
+            presentStyle: WebPresentStyle.dialog,
+            size: const CropperSize(
+              width: 400,
+              height: 400,
+            ),
+          ),
+        ],
+      );
+
+      if (croppedImage == null) return;
+
+      final bytes = await croppedImage.readAsBytes();
 
       if (bytes.isEmpty) {
-        showMessage('File foto tidak valid.');
+        showMessage('Hasil crop foto tidak valid.');
         return;
       }
 
       if (bytes.length > 2 * 1024 * 1024) {
-        showMessage('Ukuran foto maksimal 2 MB.');
+        showMessage(
+          'Ukuran foto lebih dari 2 MB. Silakan pilih foto lain.',
+        );
         return;
       }
 
@@ -267,23 +290,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       setState(() {
         selectedImageBytes = bytes;
-        selectedImageExtension = extension;
       });
 
-      showMessage('Foto berhasil dipilih!');
+      showMessage('Foto berhasil diatur!');
     } catch (e) {
-      debugPrint('IMAGE PICKER ERROR: $e');
-      showMessage('Gagal memilih foto: $e');
+      debugPrint('PICK/CROP PHOTO ERROR: $e');
+
+      if (!mounted) return;
+
+      showMessage('Gagal memilih atau mengatur foto: $e');
     }
   }
 
-  // ==========================================
-  // UPLOAD AVATAR TO SUPABASE STORAGE
-  // ==========================================
+  // UPLOAD AVATAR
 
   Future<String?> uploadAvatar() async {
-    // Jika tidak memilih foto baru,
-    // gunakan URL foto yang sudah tersimpan.
     if (selectedImageBytes == null) {
       return avatarUrl;
     }
@@ -294,49 +315,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       throw Exception('Pengguna belum login.');
     }
 
-    final extension = selectedImageExtension ?? 'jpg';
-
-    final contentType = extension == 'png'
-        ? 'image/png'
-        : 'image/jpeg';
-
-    // Nama file dibuat unik agar tidak menimpa foto sebelumnya.
     final fileName =
-        'profile_${DateTime.now().millisecondsSinceEpoch}.$extension';
+        'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-    // Foto disimpan di folder berdasarkan UUID user.
-    // Contoh: UUID_USER/profile_123456.jpg
     final filePath = '${user.id}/$fileName';
 
-    try {
-      await supabase.storage
-          .from('profile-avatars')
-          .uploadBinary(
-            filePath,
-            selectedImageBytes!,
-            fileOptions: FileOptions(
-              contentType: contentType,
-              upsert: false,
-            ),
-          );
+    await supabase.storage
+        .from('profile-avatars')
+        .uploadBinary(
+          filePath,
+          selectedImageBytes!,
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            upsert: false,
+          ),
+        );
 
-      // Ambil URL publik foto yang berhasil diunggah.
-      final publicUrl = supabase.storage
-          .from('profile-avatars')
-          .getPublicUrl(filePath);
-
-      debugPrint('AVATAR UPLOAD SUCCESS: $publicUrl');
-
-      return publicUrl;
-    } catch (e) {
-      debugPrint('AVATAR UPLOAD ERROR: $e');
-      rethrow;
-    }
+    return supabase.storage
+        .from('profile-avatars')
+        .getPublicUrl(filePath);
   }
 
-  // ==========================================
   // SAVE PROFILE
-  // ==========================================
 
   Future<void> saveProfile() async {
     if (isSaving) return;
@@ -363,24 +363,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
 
     try {
-      // Upload foto baru jika pengguna memilihnya.
       final newAvatarUrl = await uploadAvatar();
 
-      final updateData = {
+      await supabase.from('profiles').update({
         'full_name': nameController.text.trim(),
         'phone': phoneController.text.trim(),
         'birth_date': _dateForDatabase(),
         'gender': selectedGender,
         'avatar_url': newAvatarUrl,
-      };
-
-      // Update data profil berdasarkan ID user login.
-      await supabase
-          .from('profiles')
-          .update(updateData)
-          .eq('id', user.id)
-          .select()
-          .single();
+      }).eq('id', user.id);
 
       if (!mounted) return;
 
@@ -408,9 +399,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  // ==========================================
   // SNACKBAR
-  // ==========================================
 
   void showMessage(String message) {
     if (!mounted) return;
@@ -426,9 +415,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
   }
 
-  // ==========================================
   // BUILD
-  // ==========================================
 
   @override
   Widget build(BuildContext context) {
@@ -438,7 +425,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Column(
           children: [
             _buildHeader(),
-
             Expanded(
               child: isLoading
                   ? const Center(
@@ -457,11 +443,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                         children: [
                           _buildPhotoSection(),
-
                           const SizedBox(height: 32),
 
                           _buildSectionTitle('Info Pribadi'),
-
                           const SizedBox(height: 16),
 
                           _buildInput(
@@ -495,16 +479,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           const SizedBox(height: 17),
 
                           _buildGenderDropdown(),
-
                           const SizedBox(height: 32),
 
                           _buildSectionTitle('Email Terdaftar'),
-
                           const SizedBox(height: 7),
 
                           const Text(
-                            'Email ini digunakan untuk login dan menerima '
-                            'notifikasi dari LokaBaca.',
+                            'Email ini digunakan untuk login dan '
+                            'menerima notifikasi dari LokaBaca.',
                             style: TextStyle(
                               color: mutedText,
                               fontSize: 11,
@@ -513,9 +495,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
 
                           const SizedBox(height: 13),
-
                           _buildEmailField(),
-
                           const SizedBox(height: 35),
 
                           const Divider(
@@ -524,7 +504,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
 
                           const SizedBox(height: 22),
-
                           _buildSaveButton(),
                         ],
                       ),
@@ -536,9 +515,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // ==========================================
   // HEADER
-  // ==========================================
 
   Widget _buildHeader() {
     return Padding(
@@ -553,7 +530,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               size: 30,
             ),
           ),
-
           const Expanded(
             child: Text(
               'Akun',
@@ -565,16 +541,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
             ),
           ),
-
           const SizedBox(width: 48),
         ],
       ),
     );
   }
 
-  // ==========================================
   // SECTION TITLE
-  // ==========================================
 
   Widget _buildSectionTitle(String title) {
     return Text(
@@ -587,92 +560,138 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // ==========================================
   // PHOTO SECTION
-  // ==========================================
 
   Widget _buildPhotoSection() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          width: 88,
-          height: 88,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: borderColor,
-              width: 1,
-            ),
-          ),
-          child: ClipOval(
-            child: selectedImageBytes != null
-                ? Image.memory(
-                    selectedImageBytes!,
-                    width: 88,
-                    height: 88,
-                    fit: BoxFit.cover,
-                  )
-                : avatarUrl != null && avatarUrl!.isNotEmpty
-                    ? Image.network(
-                        avatarUrl!,
-                        width: 88,
-                        height: 88,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            _photoPlaceholder(),
-                      )
-                    : _photoPlaceholder(),
-          ),
-        ),
-
-        const SizedBox(width: 20),
-
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Center(
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.bottomRight,
             children: [
-              ElevatedButton.icon(
-                onPressed: isSaving ? null : pickProfilePhoto,
-                icon: const Icon(
-                  Icons.camera_alt_outlined,
-                  size: 15,
+              Container(
+                width: 112,
+                height: 112,
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white,
+                  border: Border.all(
+                    color: const Color(0xFFE5DFD2),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: navy.withOpacity(0.13),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
                 ),
-                label: const Text(
-                  'Ubah Foto Profil',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: cream,
-                  foregroundColor: navy,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 11,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+                child: ClipOval(
+                  child: selectedImageBytes != null
+                      ? Image.memory(
+                          selectedImageBytes!,
+                          width: 104,
+                          height: 104,
+                          fit: BoxFit.cover,
+                        )
+                      : avatarUrl != null && avatarUrl!.isNotEmpty
+                          ? Image.network(
+                              avatarUrl!,
+                              width: 104,
+                              height: 104,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  _photoPlaceholder(),
+                            )
+                          : _photoPlaceholder(),
                 ),
               ),
-
-              const SizedBox(height: 8),
-
-              const Text(
-                'JPG, JPEG, atau PNG\nMaksimal ukuran 2 MB',
-                style: TextStyle(
-                  color: mutedText,
-                  fontSize: 10,
-                  height: 1.5,
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: navy,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 2.5,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.camera_alt_rounded,
+                  color: Colors.white,
+                  size: 16,
                 ),
               ),
             ],
           ),
-        ),
-      ],
+
+          const SizedBox(height: 16),
+
+          const Text(
+            'Foto Profil',
+            style: TextStyle(
+              color: navy,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          const Text(
+            'Atur posisi dan ukuran foto sebelum menyimpan.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: mutedText,
+              fontSize: 11,
+            ),
+          ),
+
+          const SizedBox(height: 13),
+
+          OutlinedButton.icon(
+            onPressed: isSaving ? null : pickProfilePhoto,
+            icon: const Icon(
+              Icons.edit_rounded,
+              size: 16,
+            ),
+            label: const Text(
+              'Pilih / Atur Foto',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: navy,
+              side: const BorderSide(
+                color: navy,
+                width: 1,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 17,
+                vertical: 11,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 7),
+
+          const Text(
+            'JPG, JPEG, atau PNG • Maksimal 2 MB',
+            style: TextStyle(
+              color: mutedText,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -688,9 +707,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // ==========================================
   // TEXT INPUT
-  // ==========================================
 
   Widget _buildInput({
     required String label,
@@ -712,7 +729,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             fontWeight: FontWeight.w700,
           ),
         ),
-
         const SizedBox(height: 8),
 
         TextFormField(
@@ -728,7 +744,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             if (value == null || value.trim().isEmpty) {
               return '$label wajib diisi';
             }
-
             return null;
           },
           decoration: InputDecoration(
@@ -786,9 +801,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // ==========================================
   // GENDER DROPDOWN
-  // ==========================================
 
   Widget _buildGenderDropdown() {
     return Column(
@@ -802,7 +815,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             fontWeight: FontWeight.w700,
           ),
         ),
-
         const SizedBox(height: 8),
 
         DropdownButtonFormField<String>(
@@ -865,7 +877,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             if (value == null) {
               return 'Pilih jenis kelamin';
             }
-
             return null;
           },
         ),
@@ -873,9 +884,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // ==========================================
   // EMAIL FIELD
-  // ==========================================
 
   Widget _buildEmailField() {
     final email = supabase.auth.currentUser?.email ?? '-';
@@ -900,9 +909,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  // ==========================================
   // SAVE BUTTON
-  // ==========================================
 
   Widget _buildSaveButton() {
     return SizedBox(
