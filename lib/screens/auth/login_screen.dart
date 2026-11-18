@@ -45,7 +45,6 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final supabase = Supabase.instance.client;
 
-      // Login menggunakan Supabase Auth
       final response = await supabase.auth.signInWithPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
@@ -61,7 +60,6 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Ambil role dari tabel profiles
       final profile = await supabase
           .from('profiles')
           .select('role')
@@ -80,11 +78,9 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Membaca role secara otomatis
       final String actualRole =
           profile['role']?.toString().trim().toLowerCase() ?? '';
 
-      // Menentukan halaman berdasarkan role
       Widget destination;
 
       if (actualRole == 'admin') {
@@ -103,7 +99,6 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Masuk ke dashboard
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -182,6 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.white,
         surfaceTintColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(
@@ -195,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                   minHeight: constraints.maxHeight - 32,
@@ -205,28 +201,40 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // LOGO
+                      // ================= LOGO =================
+
                       Center(
                         child: Column(
                           children: [
+                            const SizedBox(height: 5),
+
                             Image.asset(
                               'assets/images/lokabaca.png',
-                              width: 78,
-                              height: 68,
+                              width: 190,
+                              height: 155,
                               fit: BoxFit.contain,
                               errorBuilder: (_, __, ___) {
-                                return const Icon(
-                                  Icons.menu_book_rounded,
-                                  size: 60,
-                                  color: AppColors.navy,
+                                return const SizedBox(
+                                  width: 190,
+                                  height: 155,
+                                  child: Icon(
+                                    Icons.menu_book_rounded,
+                                    size: 105,
+                                    color: AppColors.navy,
+                                  ),
                                 );
                               },
                             ),
-                            const SizedBox(height: 5),
+
+                            const SizedBox(height: 2),
+
                             const Text(
                               'Jendela Literasi & Koleksi Buku',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.3,
                                 color: AppColors.text,
                               ),
                             ),
@@ -234,31 +242,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 38),
 
-                      // JUDUL
-                      const Text(
-                        'Selamat Datang!',
-                        style: TextStyle(
-                          fontSize: 23,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.navy,
-                        ),
-                      ),
+                      // ================= EMAIL =================
 
-                      const SizedBox(height: 6),
-
-                      const Text(
-                        'Masuk ke akun LokaBaca untuk melanjutkan.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.grey,
-                        ),
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      // EMAIL
                       AuthTextField(
                         label: 'Email',
                         hint: 'nama@gmail.com',
@@ -277,9 +264,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         },
                       ),
 
-                      const SizedBox(height: 17),
+                      const SizedBox(height: 19),
 
-                      // PASSWORD
+                      // ================= PASSWORD =================
+
                       AuthTextField(
                         label: 'Password',
                         hint: 'Masukkan password akun',
@@ -309,11 +297,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         },
                       ),
 
-                      // INGAT SAYA & LUPA PASSWORD
+                      // ================= REMEMBER ME =================
+
                       Row(
                         children: [
                           SizedBox(
-                            height: 38,
+                            height: 42,
                             child: Row(
                               children: [
                                 SizedBox(
@@ -331,7 +320,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                           },
                                   ),
                                 ),
+
                                 const SizedBox(width: 4),
+
                                 const Text(
                                   'Ingat saya',
                                   style: TextStyle(fontSize: 11),
@@ -339,7 +330,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ],
                             ),
                           ),
+
                           const Spacer(),
+
                           TextButton(
                             onPressed: _isLoading
                                 ? null
@@ -363,12 +356,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
 
-                      // TOMBOL MASUK
+                      // ================= TOMBOL MASUK =================
+
                       SizedBox(
                         width: double.infinity,
-                        height: 46,
+                        height: 49,
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _login,
                           style: ElevatedButton.styleFrom(
@@ -394,15 +388,16 @@ class _LoginScreenState extends State<LoginScreen> {
                                   'Masuk',
                                   style: TextStyle(
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                         ),
                       ),
 
-                      const SizedBox(height: 23),
+                      const SizedBox(height: 26),
 
-                      // PEMBATAS
+                      // ================= PEMBATAS =================
+
                       Row(
                         children: [
                           const Expanded(
@@ -410,6 +405,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: AppColors.border,
                             ),
                           ),
+
                           Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
@@ -422,6 +418,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
+
                           const Expanded(
                             child: Divider(
                               color: AppColors.border,
@@ -430,9 +427,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 19),
+                      const SizedBox(height: 20),
 
-                      // SOCIAL LOGIN
+                      // ================= SOCIAL LOGIN =================
+
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -441,7 +439,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             label: 'Google',
                             color: const Color(0xFF4285F4),
                           ),
+
                           const SizedBox(width: 18),
+
                           _socialButton(
                             icon: Icons.apple,
                             label: 'Apple',
@@ -450,9 +450,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 25),
 
-                      // DAFTAR
+                      // ================= DAFTAR =================
+
                       Center(
                         child: Wrap(
                           alignment: WrapAlignment.center,
@@ -464,6 +465,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 color: AppColors.text,
                               ),
                             ),
+
                             GestureDetector(
                               onTap: _isLoading
                                   ? null

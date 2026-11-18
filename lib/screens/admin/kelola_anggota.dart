@@ -29,7 +29,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   bool isLoading = true;
   String? errorMessage;
   String keyword = '';
-
   int selectedIndex = 2;
 
   @override
@@ -45,7 +44,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // MESSAGE
-
   void showMessage(String message) {
     if (!mounted) return;
 
@@ -61,8 +59,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     );
   }
 
-  // FETCH ANGGOTA FROM SUPABASE
-
+  // FETCH USERS FROM SUPABASE
   Future<void> loadAnggota() async {
     if (!mounted) return;
 
@@ -75,9 +72,9 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
       final response = await supabase
           .from('profiles')
           .select(
-            'id, full_name, email, nis, status, avatar_url, created_at',
+            'id, full_name, email, nis, status, avatar_url, created_at, role',
           )
-          .eq('role', 'anggota')
+          .eq('role', 'user')
           .order('created_at', ascending: false);
 
       if (!mounted) return;
@@ -97,7 +94,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // SEARCH
-
   List<Map<String, dynamic>> get filteredAnggota {
     final search = keyword.trim().toLowerCase();
 
@@ -106,10 +102,8 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     return anggota.where((item) {
       final nama =
           (item['full_name'] ?? '').toString().toLowerCase();
-
       final email =
           (item['email'] ?? '').toString().toLowerCase();
-
       final nis =
           (item['nis'] ?? '').toString().toLowerCase();
 
@@ -120,10 +114,8 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // BOTTOM NAVIGATION
-
   Future<void> handleBottomNavigation(int index) async {
     if (index == selectedIndex) return;
-
     if (index < 0 || index > 4) return;
 
     Widget? page;
@@ -132,44 +124,38 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
       case 0:
         page = const DashboardAdmin();
         break;
-
       case 1:
         page = const KelolaBukuScreen();
         break;
-
       case 2:
-        setState(() {
-          selectedIndex = 2;
-        });
         return;
-
       case 3:
         page = const PeminjamanAdminScreen();
         break;
-
       case 4:
-        page = const AdminProfileScreen();
+        page = const ProfileAdminScreen();
         break;
     }
 
-    if (page == null) return;
+    if (page == null || !mounted) return;
 
     await Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => page!,
-      ),
+      MaterialPageRoute(builder: (_) => page!),
     );
   }
 
-  // EDIT ANGGOTA
-
+  // EDIT USER
   Future<void> editAnggota(Map<String, dynamic> item) async {
     final nisController = TextEditingController(
       text: item['nis']?.toString() ?? '',
     );
 
     String status = item['status']?.toString() ?? 'Aktif';
+
+    if (status != 'Aktif' && status != 'Non Aktif') {
+      status = 'Aktif';
+    }
 
     final result = await showDialog<bool>(
       context: context,
@@ -201,7 +187,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
                     ),
                   ),
                   const SizedBox(height: 18),
-
                   const Text(
                     'Nomor Induk Siswa (NIS)',
                     style: TextStyle(
@@ -211,7 +196,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
                     ),
                   ),
                   const SizedBox(height: 7),
-
                   TextField(
                     controller: nisController,
                     keyboardType: TextInputType.number,
@@ -227,9 +211,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
                   const Text(
                     'Status Anggota',
                     style: TextStyle(
@@ -239,7 +221,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
                     ),
                   ),
                   const SizedBox(height: 7),
-
                   DropdownButtonFormField<String>(
                     value: status,
                     decoration: InputDecoration(
@@ -310,8 +291,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     nisController.dispose();
   }
 
-  // SAVE ANGGOTA
-
+  // UPDATE USER
   Future<void> saveAnggota({
     required String id,
     required String nis,
@@ -352,8 +332,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     }
   }
 
-  // DELETE ANGGOTA
-
+  // DELETE USER PROFILE
   Future<void> deleteAnggota(Map<String, dynamic> item) async {
     final nama = item['full_name']?.toString() ?? 'anggota ini';
 
@@ -407,10 +386,18 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
     if (confirm != true) return;
 
     try {
-      await supabase
+      final response = await supabase
           .from('profiles')
           .delete()
-          .eq('id', item['id']);
+          .eq('id', item['id'].toString())
+          .select()
+          .maybeSingle();
+
+      if (response == null) {
+        throw Exception(
+          'Data tidak terhapus. Periksa izin DELETE (RLS).',
+        );
+      }
 
       if (!mounted) return;
 
@@ -428,7 +415,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // AVATAR
-
   Widget buildAvatar(Map<String, dynamic> item) {
     final avatarUrl = item['avatar_url']?.toString() ?? '';
 
@@ -464,7 +450,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // STATUS BADGE
-
   Widget buildStatusBadge(String status) {
     final isActive = status.toLowerCase() == 'aktif';
 
@@ -497,7 +482,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // MEMBER CARD
-
   Widget buildAnggotaCard(Map<String, dynamic> item) {
     final nama = item['full_name']?.toString() ?? 'Tanpa nama';
     final nis = item['nis']?.toString() ?? 'Belum diisi';
@@ -521,7 +505,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
         children: [
           buildAvatar(item),
           const SizedBox(width: 11),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -552,9 +535,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
               ],
             ),
           ),
-
           const SizedBox(width: 5),
-
           IconButton(
             tooltip: 'Edit anggota',
             onPressed: () => editAnggota(item),
@@ -564,7 +545,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
               size: 20,
             ),
           ),
-
           InkWell(
             onTap: () => deleteAnggota(item),
             borderRadius: BorderRadius.circular(30),
@@ -588,14 +568,20 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // HEADER
-
   Widget buildHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const DashboardAdmin(),
+                ),
+              );
+            },
             icon: const Icon(
               Icons.arrow_back_ios_new_rounded,
               color: navy,
@@ -613,14 +599,19 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
               ),
             ),
           ),
-          const SizedBox(width: 48),
+          IconButton(
+            onPressed: loadAnggota,
+            icon: const Icon(
+              Icons.refresh_rounded,
+              color: navy,
+            ),
+          ),
         ],
       ),
     );
   }
 
   // SEARCH BAR
-
   Widget buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -682,7 +673,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // EMPTY STATE
-
   Widget buildEmptyState() {
     final isSearching = keyword.trim().isNotEmpty;
 
@@ -724,7 +714,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // ERROR STATE
-
   Widget buildErrorState() {
     return Center(
       child: Padding(
@@ -772,7 +761,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // MAIN CONTENT
-
   Widget buildContent() {
     if (isLoading) {
       return const Center(
@@ -820,7 +808,6 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   }
 
   // BUILD
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

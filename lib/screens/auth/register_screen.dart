@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -30,9 +31,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void initState() {
     super.initState();
 
-    // Memperbarui checklist ketika password berubah.
     _passwordController.addListener(_refreshPasswordRequirements);
-    _confirmPasswordController.addListener(_refreshPasswordRequirements);
+    _confirmPasswordController.addListener(
+      _refreshPasswordRequirements,
+    );
   }
 
   void _refreshPasswordRequirements() {
@@ -48,7 +50,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-
     super.dispose();
   }
 
@@ -73,6 +74,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
+  // Proses registrasi Supabase.
   Future<void> _register() async {
     if (_isLoading) return;
 
@@ -83,7 +85,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await Supabase.instance.client.auth.signUp(
+      final response =
+          await Supabase.instance.client.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         data: {
@@ -184,6 +187,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.white,
         surfaceTintColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(
@@ -193,33 +197,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ),
-
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 2, 24, 28),
+          keyboardDismissBehavior:
+              ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(24, 4, 24, 30),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo
+                // Logo LokaBaca.
                 Center(
                   child: Column(
                     children: [
                       Image.asset(
                         'assets/images/lokabaca.png',
-                        width: 72,
-                        height: 58,
+                        width: 170,
+                        height: 140,
                         fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) {
                           return const Icon(
                             Icons.menu_book_rounded,
-                            size: 52,
+                            size: 80,
                             color: AppColors.navy,
                           );
                         },
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       const Text(
                         'Jendela Literasi & Koleksi Buku',
                         style: TextStyle(
@@ -231,31 +236,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                // Jarak setelah logo.
+                const SizedBox(height: 28),
 
-                // Heading
-                const Text(
-                  'Buat Akun',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.navy,
-                  ),
-                ),
-
-                const SizedBox(height: 5),
-
-                const Text(
-                  'Yuk, bergabung dan mulai jelajahi ribuan buku!',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.grey,
-                  ),
-                ),
-
-                const SizedBox(height: 21),
-
-                // Nama lengkap
+                // Nama lengkap.
                 AuthTextField(
                   label: 'Nama Lengkap',
                   hint: 'Masukkan nama lengkap',
@@ -269,12 +253,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
 
-                const SizedBox(height: 13),
+                const SizedBox(height: 14),
 
-                // Email
+                // Email.
                 AuthTextField(
                   label: 'Email',
-                  hint: 'Masukkan email',
+                  hint: 'nama@gmail.com',
                   icon: Icons.mail_outline_rounded,
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -289,9 +273,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
 
-                const SizedBox(height: 13),
+                const SizedBox(height: 14),
 
-                // Nomor telepon
+                // Nomor telepon.
                 AuthTextField(
                   label: 'Nomor Telepon',
                   hint: 'Masukkan nomor telepon',
@@ -312,9 +296,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
 
-                const SizedBox(height: 13),
+                const SizedBox(height: 14),
 
-                // Password
+                // Password.
                 AuthTextField(
                   label: 'Password',
                   hint: 'Masukkan password',
@@ -340,16 +324,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                 const SizedBox(height: 12),
 
-                // Checklist password
+                // Checklist password.
                 PasswordRequirements(
                   password: _passwordController.text,
                   confirmPassword: _confirmPasswordController.text,
                   showConfirmation: true,
                 ),
 
-                const SizedBox(height: 13),
+                const SizedBox(height: 14),
 
-                // Konfirmasi password
+                // Konfirmasi password.
                 AuthTextField(
                   label: 'Konfirmasi Password',
                   hint: 'Masukkan ulang password',
@@ -359,7 +343,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   suffixIcon: IconButton(
                     onPressed: () {
                       setState(() {
-                        _hideConfirmPassword = !_hideConfirmPassword;
+                        _hideConfirmPassword =
+                            !_hideConfirmPassword;
                       });
                     },
                     icon: Icon(
@@ -383,12 +368,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
 
-                const SizedBox(height: 22),
+                const SizedBox(height: 24),
 
-                // Tombol daftar
+                // Tombol daftar.
                 SizedBox(
                   width: double.infinity,
-                  height: 47,
+                  height: 49,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _register,
                     style: ElevatedButton.styleFrom(
@@ -420,9 +405,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 19),
+                const SizedBox(height: 21),
 
-                // Divider
+                // Divider.
                 Row(
                   children: [
                     const Expanded(
@@ -446,9 +431,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 13),
+                const SizedBox(height: 15),
 
-                // Social buttons
+                // Social buttons.
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -466,9 +451,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ],
                 ),
 
-                const SizedBox(height: 18),
+                const SizedBox(height: 21),
 
-                // Login navigation
+                // Login navigation.
                 Center(
                   child: Wrap(
                     alignment: WrapAlignment.center,
@@ -506,6 +491,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  // Tombol Google dan Apple.
   Widget _socialButton({
     required IconData icon,
     required String label,
@@ -517,7 +503,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'Pendaftaran dengan $label belum diaktifkan.',
         );
       },
-      icon: Icon(icon, color: color, size: 24),
+      icon: Icon(
+        icon,
+        color: color,
+        size: 24,
+      ),
       label: Text(
         label,
         style: const TextStyle(
@@ -529,6 +519,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         side: const BorderSide(color: AppColors.border),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 12,
         ),
       ),
     );

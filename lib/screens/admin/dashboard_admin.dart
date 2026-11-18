@@ -5,7 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'kelola_buku.dart';
 import 'kelola_anggota.dart';
 import 'peminjaman_admin.dart';
-import '../auth/login_screen.dart';
+import 'profile_admin.dart';
+import 'laporan_admin.dart';
+import 'notifikasi_admin.dart';
 import 'admin_bottom_navigation.dart';
 
 class DashboardAdmin extends StatefulWidget {
@@ -36,12 +38,28 @@ class _DashboardAdminState extends State<DashboardAdmin> {
   int activeLoans = 0;
   int overdueLoans = 0;
 
+  int unreadNotificationCount = 0;
+
   List<Map<String, dynamic>> recentLoans = [];
+
+  RealtimeChannel? notificationChannel;
 
   @override
   void initState() {
     super.initState();
+
     loadDashboardData();
+    loadUnreadNotificationCount();
+    listenToNotifications();
+  }
+
+  @override
+  void dispose() {
+    if (notificationChannel != null) {
+      supabase.removeChannel(notificationChannel!);
+    }
+
+    super.dispose();
   }
 
   // LOAD DASHBOARD DATA
@@ -55,15 +73,18 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     });
 
     try {
+      // Menghitung seluruh buku
       final booksCount = await supabase
           .from('books')
           .count(CountOption.exact);
 
+      // Menghitung anggota dengan role user
       final membersCount = await supabase
           .from('profiles')
           .count(CountOption.exact)
-          .eq('role', 'anggota');
+          .eq('role', 'user');
 
+      // Mengambil seluruh data peminjaman
       final borrowingResponse = await supabase
           .from('borrowings')
           .select('''
@@ -81,12 +102,14 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       final borrowings =
           List<Map<String, dynamic>>.from(borrowingResponse);
 
+      // Mengambil ID buku
       final bookIds = borrowings
           .map((item) => item['book_id'])
           .whereType<int>()
           .toSet()
           .toList();
 
+      // Mengambil ID pengguna
       final userIds = borrowings
           .map((item) => item['user_id']?.toString())
           .whereType<String>()
@@ -96,6 +119,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
       final Map<int, Map<String, dynamic>> booksMap = {};
 
+      // Mengambil detail buku
       if (bookIds.isNotEmpty) {
         final booksResponse = await supabase
             .from('books')
@@ -114,6 +138,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
       final Map<String, Map<String, dynamic>> profilesMap = {};
 
+      // Mengambil nama pengguna berdasarkan user_id
       if (userIds.isNotEmpty) {
         final profilesResponse = await supabase
             .from('profiles')
@@ -130,6 +155,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         }
       }
 
+      // Menggabungkan data peminjaman, buku, dan profil
       final List<Map<String, dynamic>> combinedLoans = [];
 
       for (final borrowing in borrowings) {
@@ -147,10 +173,12 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         });
       }
 
+      // Menghitung peminjaman aktif
       final active = combinedLoans.where((borrowing) {
         return _isActiveStatus(borrowing['status']);
       }).toList();
 
+      // Menghitung peminjaman terlambat
       final overdue = active.where((borrowing) {
         return _isOverdue(borrowing);
       }).toList();
@@ -172,6 +200,72 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         isLoading = false;
         errorMessage = e.toString();
       });
+    }
+  }
+
+  // LOAD UNREAD NOTIFICATION COUNT
+
+  Future<void> loadUnreadNotificationCount() async {
+    try {
+      final count = await supabase
+          .from('notifications')
+          .count(CountOption.exact)
+          .eq('is_read', false);
+
+      if (!mounted) return;
+
+      setState(() {
+        unreadNotificationCount = count;
+      });
+    } catch (e) {
+      debugPrint('Gagal mengambil jumlah notifikasi: $e');
+    }
+  }
+
+  // REALTIME NOTIFICATION
+
+  void listenToNotifications() {
+    notificationChannel = supabase
+        .channel('dashboard-notifications')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'notifications',
+          callback: (payload) {
+            loadUnreadNotificationCount();
+          },
+        )
+        .subscribe();
+  }
+
+  // OPEN NOTIFICATION PAGE
+
+  Future<void> _openNotifications() async {
+    if (!mounted || isNavigating) return;
+
+    setState(() {
+      isNavigating = true;
+    });
+
+    try {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const NotifikasiAdminScreen(),
+        ),
+      );
+
+      await loadUnreadNotificationCount();
+    } catch (e) {
+      if (mounted) {
+        showMessage('Gagal membuka notifikasi: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isNavigating = false;
+        });
+      }
     }
   }
 
@@ -258,6 +352,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         });
 
         await loadDashboardData();
+        await loadUnreadNotificationCount();
       } else {
         isNavigating = false;
       }
@@ -300,7 +395,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       case 4:
         navigateToPage(
           4,
-          const AdminProfileScreen(),
+          const ProfileAdminScreen(),
         );
         break;
 
@@ -312,7 +407,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
   void _openProfile() {
     navigateToPage(
       4,
-      const AdminProfileScreen(),
+      const ProfileAdminScreen(),
     );
   }
 
@@ -327,7 +422,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => const AdminReportScreen(),
+          builder: (_) => const LaporanAdminScreen(),
         ),
       );
     } catch (e) {
@@ -341,6 +436,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
         });
 
         await loadDashboardData();
+        await loadUnreadNotificationCount();
       } else {
         isNavigating = false;
       }
@@ -436,16 +532,79 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               ],
             ),
           ),
-          _buildHeaderButton(
-            Icons.notifications_none_rounded,
-            () => showMessage('Belum ada notifikasi baru'),
-          ),
+
+          // NOTIFICATION BUTTON
+          _buildNotificationButton(),
+
           const SizedBox(width: 5),
+
+          // PROFILE BUTTON
           _buildHeaderButton(
             Icons.account_circle_rounded,
             _openProfile,
           ),
         ],
+      ),
+    );
+  }
+
+  // NOTIFICATION BUTTON WITH BADGE
+
+  Widget _buildNotificationButton() {
+    return InkWell(
+      onTap: isNavigating ? null : _openNotifications,
+      borderRadius: BorderRadius.circular(30),
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Center(
+              child: Icon(
+                Icons.notifications_none_rounded,
+                color: navy,
+                size: 25,
+              ),
+            ),
+
+            if (unreadNotificationCount > 0)
+              Positioned(
+                top: 1,
+                right: 0,
+                child: Container(
+                  constraints: const BoxConstraints(
+                    minWidth: 17,
+                    minHeight: 17,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE45757),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      unreadNotificationCount > 99
+                          ? '99+'
+                          : '$unreadNotificationCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -538,7 +697,10 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     return RefreshIndicator(
       color: navy,
       backgroundColor: cream,
-      onRefresh: loadDashboardData,
+      onRefresh: () async {
+        await loadDashboardData();
+        await loadUnreadNotificationCount();
+      },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 35, 16, 24),
@@ -960,738 +1122,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-      ),
-    );
-  }
-}
-// HALAMAN PROFIL ADMI
-
-class AdminProfileScreen extends StatefulWidget {
-  const AdminProfileScreen({super.key});
-
-  @override
-  State<AdminProfileScreen> createState() =>
-      _AdminProfileScreenState();
-}
-
-class _AdminProfileScreenState extends State<AdminProfileScreen> {
-  static const navy = Color(0xFF2E4057);
-  static const cream = Color(0xFFF8F4EA);
-
-  final supabase = Supabase.instance.client;
-
-  Map<String, dynamic>? profile;
-  bool loading = true;
-  String? error;
-
-  @override
-  void initState() {
-    super.initState();
-    loadProfile();
-  }
-
-  Future<void> loadProfile() async {
-    try {
-      final user = supabase.auth.currentUser;
-
-      if (user == null) {
-        throw Exception('Admin belum login.');
-      }
-
-      final response = await supabase
-          .from('profiles')
-          .select('id, full_name, role')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (!mounted) return;
-
-      setState(() {
-        profile = response;
-        loading = false;
-        error = null;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        error = e.toString();
-        loading = false;
-      });
-    }
-  }
-
-  Future<void> logout() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Keluar Akun'),
-        content: const Text(
-          'Apakah kamu yakin ingin keluar dari akun admin?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(dialogContext, false);
-            },
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: navy,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              Navigator.pop(dialogContext, true);
-            },
-            child: const Text('Keluar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    try {
-      await supabase.auth.signOut();
-
-      if (!mounted) return;
-
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (context) => const LoginScreen(),
-        ),
-        (route) => false,
-      );
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal keluar: $e'),
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = supabase.auth.currentUser;
-
-    final name = profile?['full_name']?.toString() ?? 'Admin';
-    final email = user?.email ?? '-';
-    final role = profile?['role']?.toString() ?? 'admin';
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: navy,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'Profil Admin',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-      body: loading
-          ? const Center(
-              child: CircularProgressIndicator(color: navy),
-            )
-          : error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          color: navy,
-                          size: 42,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          error!,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton(
-                          onPressed: loadProfile,
-                          child: const Text('Coba Lagi'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: loadProfile,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(20),
-                    children: [
-                      const SizedBox(height: 25),
-                      Center(
-                        child: Container(
-                          width: 100,
-                          height: 100,
-                          decoration: const BoxDecoration(
-                            color: cream,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.account_circle_rounded,
-                            size: 85,
-                            color: navy,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Text(
-                        name,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: navy,
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        email,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cream,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            role.toUpperCase(),
-                            style: const TextStyle(
-                              color: navy,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 35),
-                      _profileItem(
-                        Icons.person_outline_rounded,
-                        'Nama Lengkap',
-                        name,
-                      ),
-                      _profileItem(
-                        Icons.email_outlined,
-                        'Email',
-                        email,
-                      ),
-                      _profileItem(
-                        Icons.admin_panel_settings_outlined,
-                        'Role',
-                        role,
-                      ),
-                      const SizedBox(height: 30),
-                      SizedBox(
-                        height: 48,
-                        child: ElevatedButton.icon(
-                          onPressed: logout,
-                          icon: const Icon(Icons.logout_rounded),
-                          label: const Text(
-                            'Keluar dari Akun',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: navy,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-    );
-  }
-
-  Widget _profileItem(
-    IconData icon,
-    String title,
-    String value,
-  ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: navy, size: 23),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 10,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: navy,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-// HALAMAN LAPORAN ADMI
-
-class AdminReportScreen extends StatefulWidget {
-  const AdminReportScreen({super.key});
-
-  @override
-  State<AdminReportScreen> createState() =>
-      _AdminReportScreenState();
-}
-
-class _AdminReportScreenState extends State<AdminReportScreen> {
-  static const navy = Color(0xFF2E4057);
-  static const cream = Color(0xFFF8F4EA);
-  static const muted = Color(0xFF8792A1);
-
-  final supabase = Supabase.instance.client;
-
-  bool loading = true;
-  String? error;
-
-  int totalBorrowings = 0;
-  int activeBorrowings = 0;
-  int returnedBorrowings = 0;
-  int overdueBorrowings = 0;
-
-  List<Map<String, dynamic>> borrowings = [];
-
-  @override
-  void initState() {
-    super.initState();
-    loadReport();
-  }
-
-  Future<void> loadReport() async {
-    if (!mounted) return;
-
-    setState(() {
-      loading = true;
-      error = null;
-    });
-
-    try {
-      final response = await supabase
-          .from('borrowings')
-          .select('''
-            id,
-            user_id,
-            book_id,
-            borrowed_at,
-            due_date,
-            returned_at,
-            status,
-            created_at
-          ''')
-          .order('created_at', ascending: false);
-
-      final data = List<Map<String, dynamic>>.from(response);
-
-      int active = 0;
-      int returned = 0;
-      int overdue = 0;
-
-      for (final item in data) {
-        final status =
-            item['status']?.toString().toLowerCase().trim() ?? '';
-
-        final isActive = [
-          'dipinjam',
-          'borrowed',
-          'aktif',
-          'active',
-        ].contains(status);
-
-        if (isActive) {
-          active++;
-
-          final dueDate = DateTime.tryParse(
-            item['due_date']?.toString() ?? '',
-          );
-
-          if (dueDate != null) {
-            final now = DateTime.now();
-            final today = DateTime(now.year, now.month, now.day);
-
-            final deadline = DateTime(
-              dueDate.year,
-              dueDate.month,
-              dueDate.day,
-            );
-
-            if (deadline.isBefore(today)) {
-              overdue++;
-            }
-          }
-        }
-
-        if ([
-          'dikembalikan',
-          'returned',
-          'selesai',
-        ].contains(status)) {
-          returned++;
-        }
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        borrowings = data;
-        totalBorrowings = data.length;
-        activeBorrowings = active;
-        returnedBorrowings = returned;
-        overdueBorrowings = overdue;
-        loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-        error = e.toString();
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: navy,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'Laporan Perpustakaan',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-      body: loading
-          ? const Center(
-              child: CircularProgressIndicator(color: navy),
-            )
-          : error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.cloud_off_outlined,
-                          color: navy,
-                          size: 45,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Laporan gagal dimuat',
-                          style: TextStyle(
-                            color: navy,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          error!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                        const SizedBox(height: 15),
-                        ElevatedButton(
-                          onPressed: loadReport,
-                          child: const Text('Coba Lagi'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: loadReport,
-                  color: navy,
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(18),
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: navy,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Laporan LokaBaca',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            SizedBox(height: 6),
-                            Text(
-                              'Ringkasan aktivitas peminjaman perpustakaan.',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 22),
-                      const Text(
-                        'Ringkasan Peminjaman',
-                        style: TextStyle(
-                          color: navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: 1.45,
-                        children: [
-                          _reportCard(
-                            'Total Peminjaman',
-                            totalBorrowings,
-                            Icons.library_books_outlined,
-                          ),
-                          _reportCard(
-                            'Sedang Dipinjam',
-                            activeBorrowings,
-                            Icons.menu_book_rounded,
-                          ),
-                          _reportCard(
-                            'Dikembalikan',
-                            returnedBorrowings,
-                            Icons.assignment_turned_in_outlined,
-                          ),
-                          _reportCard(
-                            'Terlambat',
-                            overdueBorrowings,
-                            Icons.warning_amber_rounded,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 25),
-                      const Text(
-                        'Riwayat Peminjaman',
-                        style: TextStyle(
-                          color: navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (borrowings.isEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(25),
-                          decoration: BoxDecoration(
-                            color: cream,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              'Belum ada data laporan.',
-                              style: TextStyle(
-                                color: muted,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        ...borrowings.map(_reportLoanItem),
-                      const SizedBox(height: 25),
-                      SizedBox(
-                        height: 45,
-                        child: OutlinedButton.icon(
-                          onPressed: loadReport,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Perbarui Laporan'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: navy,
-                            side: const BorderSide(color: navy),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-    );
-  }
-
-  Widget _reportCard(
-    String title,
-    int value,
-    IconData icon,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8E4DB)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: navy, size: 27),
-          const SizedBox(height: 9),
-          Text(
-            '$value',
-            style: const TextStyle(
-              color: navy,
-              fontSize: 25,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: muted,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _reportLoanItem(Map<String, dynamic> item) {
-    final status =
-        item['status']?.toString().toUpperCase() ?? '-';
-
-    final date = DateTime.tryParse(
-      (item['borrowed_at'] ?? item['created_at'])
-              ?.toString() ??
-          '',
-    );
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.receipt_long_rounded,
-            color: navy,
-            size: 25,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Peminjaman #${item['id']}',
-                  style: const TextStyle(
-                    color: navy,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  date == null
-                      ? '-'
-                      : '${date.day}/${date.month}/${date.year}',
-                  style: const TextStyle(
-                    color: muted,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 9,
-              vertical: 6,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              status,
-              style: const TextStyle(
-                color: navy,
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

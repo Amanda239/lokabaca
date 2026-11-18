@@ -300,7 +300,7 @@ class _PeminjamanAdminScreenState
         break;
 
       case 4:
-        page = const AdminProfileScreen();
+        page = const ProfileAdminScreen();
         break;
 
       default:

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/constants/app_colors.dart';
@@ -7,6 +8,10 @@ import 'screens/auth/splash_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Inisialisasi format tanggal Indonesia
+  await initializeDateFormatting('id_ID', null);
+
+  // Inisialisasi Supabase
   await Supabase.initialize(
     url: 'https://mwcjntpvfxyvfosxjwrk.supabase.co',
     publishableKey: 'sb_publishable_doU8rB3Cj8DdO02xDzXSCg_2-9yhE_q',

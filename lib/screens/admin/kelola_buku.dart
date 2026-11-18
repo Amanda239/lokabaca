@@ -205,7 +205,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
         page = const PeminjamanAdminScreen();
         break;
       case 4:
-        page = const AdminProfileScreen();
+        page = const ProfileAdminScreen();
         break;
     }
 

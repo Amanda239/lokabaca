@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
 
 class FormPeminjamanScreen extends StatefulWidget {
@@ -17,20 +18,31 @@ class FormPeminjamanScreen extends StatefulWidget {
 
 class _FormPeminjamanScreenState
     extends State<FormPeminjamanScreen> {
-  int selectedDuration = 14;
+  int? selectedDuration;
 
   final TextEditingController noteController =
       TextEditingController();
 
+  final supabase = Supabase.instance.client;
+
   bool isLoading = false;
 
-  DateTime get dueDate {
+  static const Color navy = AppColors.navy;
+  static const Color cream = Color(0xFFFAF5EB);
+  static const Color muted = Color(0xFF8993A1);
+  static const Color border = Color(0xFFE5DED1);
+
+  DateTime? get dueDate {
+    if (selectedDuration == null) return null;
+
     return DateTime.now().add(
-      Duration(days: selectedDuration),
+      Duration(days: selectedDuration!),
     );
   }
 
   String get formattedDate {
+    if (dueDate == null) return '-';
+
     const months = [
       'Januari',
       'Februari',
@@ -46,8 +58,8 @@ class _FormPeminjamanScreenState
       'Desember',
     ];
 
-    return '${dueDate.day.toString().padLeft(2, '0')} '
-        '${months[dueDate.month - 1]} ${dueDate.year}';
+    return '${dueDate!.day.toString().padLeft(2, '0')} '
+        '${months[dueDate!.month - 1]} ${dueDate!.year}';
   }
 
   @override
@@ -56,28 +68,99 @@ class _FormPeminjamanScreenState
     super.dispose();
   }
 
+  // =====================================================
+  // MESSAGE
+  // =====================================================
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.navy,
+        backgroundColor: navy,
       ),
     );
   }
 
-  void _submitBorrowing() {
+  // =====================================================
+  // SUBMIT BORROWING TO SUPABASE
+  // =====================================================
+
+  Future<void> _submitBorrowing() async {
     if (isLoading) return;
+
+    if (selectedDuration == null) {
+      _showMessage(
+        'Pilih durasi peminjaman terlebih dahulu.',
+      );
+      return;
+    }
+
+    final user = supabase.auth.currentUser;
+
+    if (user == null) {
+      _showMessage(
+        'Silakan login terlebih dahulu.',
+      );
+      return;
+    }
+
+    final bookId = widget.book['id'];
+
+    if (bookId == null) {
+      _showMessage(
+        'Data buku tidak ditemukan.',
+      );
+      return;
+    }
+
+    final stock = int.tryParse(
+          widget.book['stock']?.toString() ?? '0',
+        ) ??
+        0;
+
+    if (stock <= 0) {
+      _showMessage(
+        'Maaf, stok buku sedang tidak tersedia.',
+      );
+      return;
+    }
 
     setState(() {
       isLoading = true;
     });
 
-    // Sementara menampilkan konfirmasi.
-    // Proses penyimpanan ke Supabase ditambahkan setelah
-    // struktur tabel borrowings dipastikan.
+    try {
+      final now = DateTime.now();
 
-    Future.delayed(const Duration(milliseconds: 500), () {
+      final selectedDueDate = now.add(
+        Duration(days: selectedDuration!),
+      );
+
+      final dueDateString =
+          '${selectedDueDate.year}-'
+          '${selectedDueDate.month.toString().padLeft(2, '0')}-'
+          '${selectedDueDate.day.toString().padLeft(2, '0')}';
+
+      await supabase.from('borrowings').insert({
+        'user_id': user.id,
+        'book_id': bookId,
+        'borrowed_at': now.toUtc().toIso8601String(),
+        'due_date': dueDateString,
+        'status': 'Dipinjam',
+        'note': noteController.text.trim().isEmpty
+            ? null
+            : noteController.text.trim(),
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+
+      await _showSuccessDialog();
+    } catch (e) {
       if (!mounted) return;
 
       setState(() {
@@ -85,49 +168,125 @@ class _FormPeminjamanScreenState
       });
 
       _showMessage(
-        'Form peminjaman siap diajukan.',
+        'Gagal mengajukan peminjaman: $e',
       );
-    });
+    }
   }
+
+  // =====================================================
+  // SUCCESS DIALOG
+  // =====================================================
+
+  Future<void> _showSuccessDialog() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.check_circle_rounded,
+                color: Color(0xFF65A77A),
+                size: 58,
+              ),
+
+              const SizedBox(height: 15),
+
+              const Text(
+                'Pengajuan Berhasil!',
+                style: TextStyle(
+                  color: navy,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              const Text(
+                'Pengajuan peminjaman buku berhasil dikirim.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: muted,
+                  fontSize: 12,
+                  height: 1.5,
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    Navigator.pop(context, true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: navy,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  child: const Text('Selesai'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // =====================================================
+  // BOOK COVER
+  // =====================================================
 
   Widget _buildCover(String cover) {
     if (cover.isEmpty) {
-      return Container(
-        color: const Color(0xFFECE5D5),
-        child: const Icon(
-          Icons.menu_book_rounded,
-          size: 45,
-          color: AppColors.navy,
-        ),
-      );
+      return _coverPlaceholder();
     }
 
     if (cover.startsWith('http')) {
       return Image.network(
         cover,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) {
-          return const Icon(
-            Icons.menu_book_rounded,
-            color: AppColors.navy,
-            size: 45,
-          );
-        },
+        errorBuilder: (_, __, ___) =>
+            _coverPlaceholder(),
       );
     }
 
     return Image.asset(
       cover,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) {
-        return const Icon(
-          Icons.menu_book_rounded,
-          color: AppColors.navy,
-          size: 45,
-        );
-      },
+      errorBuilder: (_, __, ___) =>
+          _coverPlaceholder(),
     );
   }
+
+  Widget _coverPlaceholder() {
+    return Container(
+      color: cream,
+      child: const Center(
+        child: Icon(
+          Icons.menu_book_rounded,
+          size: 38,
+          color: navy,
+        ),
+      ),
+    );
+  }
+
+  // =====================================================
+  // BUILD
+  // =====================================================
 
   @override
   Widget build(BuildContext context) {
@@ -135,8 +294,12 @@ class _FormPeminjamanScreenState
 
     final title = book['title']?.toString() ?? 'Judul Buku';
     final author = book['author']?.toString() ?? 'Penulis';
-    final cover = (book['cover_url'] ?? book['cover'] ?? '')
-        .toString();
+
+    final cover = (
+      book['cover_url'] ??
+      book['cover'] ??
+      ''
+    ).toString();
 
     final stock = book['stock'] ?? 3;
 
@@ -145,342 +308,82 @@ class _FormPeminjamanScreenState
       body: SafeArea(
         child: Column(
           children: [
-            // HEADER
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 12,
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: AppColors.navy,
-                      size: 21,
-                    ),
-                  ),
-                  const Expanded(
-                    child: Center(
-                      child: Text(
-                        'Form Peminjaman',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.navy,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 45),
-                ],
-              ),
-            ),
+            _buildHeader(),
 
             Expanded(
               child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(
-                  34,
-                  25,
-                  34,
-                  20,
+                  24,
+                  18,
+                  24,
+                  28,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // INFORMASI BUKU
-                    Row(
-                      children: [
-                        Container(
-                          width: 98,
-                          height: 140,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(5),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
-                                blurRadius: 5,
-                                offset: const Offset(2, 3),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(5),
-                            child: _buildCover(cover),
-                          ),
-                        ),
-
-                        const SizedBox(width: 23),
-
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                style: const TextStyle(
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.navy,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                author,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 52),
-                              Text(
-                                'Tersedia $stock',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  color: AppColors.navy,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    _buildBookSection(
+                      title: title,
+                      author: author,
+                      cover: cover,
+                      stock: stock,
                     ),
 
-                    const SizedBox(height: 42),
+                    const SizedBox(height: 32),
 
-                    // DURASI PEMINJAMAN
-                    Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
-                      children: const [
-                        Text(
-                          'Durasi Peminjaman',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.navy,
-                          ),
-                        ),
-                        Text(
-                          'Dapat diperpanjang 1x',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.blueGrey,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                    _buildSectionTitle(
+                      'Durasi Peminjaman',
                     ),
 
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 7),
+
+                    const Text(
+                      'Pilih lama waktu peminjaman buku.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: muted,
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
 
                     Row(
                       children: [
                         _durationButton(7),
-                        const SizedBox(width: 24),
+                        const SizedBox(width: 14),
                         _durationButton(14),
                       ],
                     ),
 
-                    const SizedBox(height: 27),
+                    const SizedBox(height: 25),
 
-                    // TANGGAL JATUH TEMPO
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFAF5EB),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.18),
-                            blurRadius: 4,
-                            offset: const Offset(1, 3),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.calendar_month_outlined,
-                            color: AppColors.navy,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'JATUH TEMPO PENGEMBALIAN',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.blueGrey,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  formattedDate,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.navy,
-                                  ),
-                                ),
-                                const SizedBox(height: 5),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 15,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFA9D9B8),
-                                    borderRadius:
-                                        BorderRadius.circular(20),
-                                  ),
-                                  child: const Text(
-                                    'Bebas Biaya (Gratis)',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF355B43),
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildDueDateCard(),
 
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 28),
 
-                    // CATATAN
+                    _buildSectionTitle('Catatan'),
+
+                    const SizedBox(height: 7),
+
                     const Text(
-                      'Catatan (opsional)',
+                      'Tambahkan catatan jika diperlukan.',
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.navy,
+                        fontSize: 12,
+                        color: muted,
                       ),
                     ),
 
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
 
-                    Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFAF5EB),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 4,
-                            offset: const Offset(1, 3),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: noteController,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          hintText: 'Tulis catatan jika diperlukan..',
-                          hintStyle: TextStyle(
-                            fontSize: 14,
-                            color: Colors.black38,
-                          ),
-                          contentPadding: EdgeInsets.all(16),
-                          border: InputBorder.none,
-                        ),
-                      ),
-                    ),
+                    _buildNoteField(),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
 
-                    // INFORMASI DENDA
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5D7CC),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 4,
-                            offset: const Offset(1, 3),
-                          ),
-                        ],
-                      ),
-                      child: const Row(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            color: AppColors.navy,
-                            size: 16,
-                          ),
-                          SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Maksimal perpanjangan masa pinjam 1x per buku. Denda keterlambatan buku berlaku Rp1.000/hari.',
-                              style: TextStyle(
-                                fontSize: 14,
-                                height: 1.3,
-                                color: AppColors.navy,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildFineInformation(),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
-                    // TOMBOL AJUKAN
-                    SizedBox(
-                      width: double.infinity,
-                      height: 46,
-                      child: ElevatedButton(
-                        onPressed: isLoading
-                            ? null
-                            : _submitBorrowing,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.navy,
-                          foregroundColor: Colors.white,
-                          elevation: 3,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                        ),
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Ajukan Peminjaman',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                      ),
-                    ),
+                    _buildSubmitButton(),
                   ],
                 ),
               ),
@@ -491,44 +394,415 @@ class _FormPeminjamanScreenState
     );
   }
 
-  // TOMBOL DURASI
+  // =====================================================
+  // HEADER
+  // =====================================================
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        14,
+        10,
+        14,
+        12,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(
+            color: Color(0xFFF0EEE9),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: navy,
+              size: 19,
+            ),
+          ),
+
+          const Expanded(
+            child: Text(
+              'Form Peminjaman',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                color: navy,
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 48),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // BOOK INFORMATION
+  // =====================================================
+
+  Widget _buildBookSection({
+    required String title,
+    required String author,
+    required String cover,
+    required dynamic stock,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cream,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 88,
+            height: 126,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(7),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 6,
+                  offset: const Offset(2, 3),
+                ),
+              ],
+            ),
+            child: _buildCover(cover),
+          ),
+
+          const SizedBox(width: 17),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    height: 1.35,
+                    fontWeight: FontWeight.w800,
+                    color: navy,
+                  ),
+                ),
+
+                const SizedBox(height: 7),
+
+                Text(
+                  author,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: muted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.menu_book_rounded,
+                      size: 15,
+                      color: navy,
+                    ),
+
+                    const SizedBox(width: 6),
+
+                    Text(
+                      'Tersedia $stock',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: navy,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // SECTION TITLE
+  // =====================================================
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w800,
+        color: navy,
+      ),
+    );
+  }
+
+  // =====================================================
+  // DURATION BUTTON
+  // =====================================================
+
   Widget _durationButton(int days) {
     final isSelected = selectedDuration == days;
 
-    return InkWell(
-      onTap: () {
-        setState(() {
-          selectedDuration = days;
-        });
-      },
-      borderRadius: BorderRadius.circular(25),
-      child: Container(
-        width: 90,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.navy
-              : const Color(0xFFFAF5EB),
-          borderRadius: BorderRadius.circular(25),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.20),
-              blurRadius: 3,
-              offset: const Offset(1, 2),
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            selectedDuration = days;
+          });
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          height: 45,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? navy : cream,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? navy : border,
             ),
-          ],
-        ),
-        child: Text(
-          '$days Hari',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: isSelected
-                ? Colors.white
-                : AppColors.navy,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (isSelected) ...[
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+                const SizedBox(width: 7),
+              ],
+
+              Text(
+                '$days Hari',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: isSelected ? Colors.white : navy,
+                ),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  // =====================================================
+  // DUE DATE
+  // =====================================================
+
+  Widget _buildDueDateCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cream,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: navy.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.calendar_month_rounded,
+              color: navy,
+              size: 21,
+            ),
+          ),
+
+          const SizedBox(width: 13),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'TANGGAL JATUH TEMPO',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: muted,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+
+                const SizedBox(height: 6),
+
+                Text(
+                  formattedDate,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: navy,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE1EFE3),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'Bebas biaya peminjaman',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF42694D),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // NOTE FIELD
+  // =====================================================
+
+  Widget _buildNoteField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: cream,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border),
+      ),
+      child: TextField(
+        controller: noteController,
+        maxLines: 3,
+        style: const TextStyle(
+          fontSize: 13,
+          color: navy,
+        ),
+        decoration: const InputDecoration(
+          hintText: 'Tulis catatan jika diperlukan...',
+          hintStyle: TextStyle(
+            fontSize: 12,
+            color: muted,
+          ),
+          contentPadding: EdgeInsets.all(14),
+          border: InputBorder.none,
+        ),
+      ),
+    );
+  }
+
+  // =====================================================
+  // FINE INFORMATION
+  // =====================================================
+
+  Widget _buildFineInformation() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1E8DF),
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            color: navy,
+            size: 18,
+          ),
+
+          SizedBox(width: 9),
+
+          Expanded(
+            child: Text(
+              'Masa peminjaman dapat diperpanjang 1 kali per buku. Denda keterlambatan sebesar Rp1.000 per hari.',
+              style: TextStyle(
+                fontSize: 11,
+                height: 1.5,
+                color: navy,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // SUBMIT BUTTON
+  // =====================================================
+
+  Widget _buildSubmitButton() {
+    final canSubmit =
+        selectedDuration != null && !isLoading;
+
+    return SizedBox(
+      width: double.infinity,
+      height: 47,
+      child: ElevatedButton(
+        onPressed: canSubmit ? _submitBorrowing : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: navy,
+          disabledBackgroundColor: const Color(0xFFD8DCE1),
+          foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white70,
+          elevation: canSubmit ? 2 : 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(25),
+          ),
+        ),
+        child: isLoading
+            ? const SizedBox(
+                width: 21,
+                height: 21,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : const Text(
+                'Ajukan Peminjaman',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
       ),
     );
   }
