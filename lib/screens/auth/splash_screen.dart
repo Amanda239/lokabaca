@@ -2,18 +2,30 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../user/kebijakan_peminjaman_screen.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
-  void _goToLogin(BuildContext context) {
-    Navigator.push(
+  Future<void> _goToPolicy(BuildContext context) async {
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => const LoginScreen(),
+        builder: (_) => const KebijakanPeminjamanScreen(),
       ),
     );
+
+    if (!context.mounted) return;
+
+    if (result == true) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(),
+        ),
+      );
+    }
   }
 
   @override
@@ -70,7 +82,7 @@ class SplashScreen extends StatelessWidget {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: () => _goToLogin(context),
+                      onPressed: () => _goToPolicy(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.navy,
                         foregroundColor: AppColors.white,
@@ -105,7 +117,7 @@ class SplashScreen extends StatelessWidget {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () => _goToLogin(context),
+                        onTap: () => _goToPolicy(context),
                         child: const Text(
                           'Masuk',
                           style: TextStyle(
