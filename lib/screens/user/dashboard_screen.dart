@@ -8,6 +8,7 @@ import 'searchpage_screen.dart';
 import 'peminjaman_screen.dart';
 import 'profile_screen.dart';
 import 'detail_buku_screen.dart';
+import 'wishlist_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -28,15 +29,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'cover': 'assets/images/hujan.jpeg',
       'color': const Color(0xFF75C9E0),
       'icon': Icons.water_drop_rounded,
-
-      // Detail buku
-  'reviews': '8.5k ulasan',
-  'tags': ['Romansa', 'Drama', 'Fiksi'],
-  'synopsis':
-      'Novel Hujan karya Tere Liye menceritakan kisah Lail dan Esok yang bertemu di tengah bencana alam dahsyat. Di tengah kehilangan, persahabatan, cinta, dan kenangan, Lail harus menghadapi masa lalu serta menentukan apa yang ingin ia lupakan.',
-  'publisher': 'Gramedia Pustaka Utama',
-  'year': '2016',
-  'pages': '320 halaman',
+      'reviews': '8.5k ulasan',
+      'tags': ['Romansa', 'Drama', 'Fiksi'],
+      'synopsis':
+          'Novel Hujan karya Tere Liye menceritakan kisah Lail dan Esok yang bertemu di tengah bencana alam dahsyat. Di tengah kehilangan, persahabatan, cinta, dan kenangan, Lail harus menghadapi masa lalu serta menentukan apa yang ingin ia lupakan.',
+      'publisher': 'Gramedia Pustaka Utama',
+      'year': '2016',
+      'pages': '320 halaman',
     },
     {
       'title': 'Cake Shop',
@@ -46,15 +45,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'cover': 'assets/images/cakeshop.jpeg',
       'color': const Color(0xFFE9D0D0),
       'icon': Icons.cake_rounded,
-
-       // Detail buku
-  'reviews': '2.1k ulasan',
-  'tags': ['Romansa', 'Drama', 'Rekomendasi'],
-  'synopsis':
-      'Sebuah cerita tentang kehidupan, pertemuan, dan kisah cinta yang tumbuh di sebuah toko kue. Di balik aroma manis dan berbagai hidangan, tersimpan cerita tentang impian, persahabatan, dan kesempatan untuk menemukan kebahagiaan.',
-  'publisher': 'Penerbit Nana',
-  'year': '2023',
-  'pages': '250 halaman',
+      'reviews': '2.1k ulasan',
+      'tags': ['Romansa', 'Drama', 'Rekomendasi'],
+      'synopsis':
+          'Sebuah cerita tentang kehidupan, pertemuan, dan kisah cinta yang tumbuh di sebuah toko kue. Di balik aroma manis dan berbagai hidangan, tersimpan cerita tentang impian, persahabatan, dan kesempatan untuk menemukan kebahagiaan.',
+      'publisher': 'Penerbit Nana',
+      'year': '2023',
+      'pages': '250 halaman',
     },
     {
       'title': 'Bumi',
@@ -64,15 +61,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'cover': 'assets/images/bumi.jpeg',
       'color': const Color(0xFF244C38),
       'icon': Icons.public_rounded,
-
-      // Detail buku
-  'reviews': '9.2k ulasan',
-  'tags': ['Fantasi', 'Petualangan', 'Fiksi'],
-  'synopsis':
-      'Novel Bumi karya Tere Liye menceritakan petualangan Raib, seorang gadis yang memiliki kemampuan menghilang. Bersama kedua sahabatnya, Seli dan Ali, ia menjelajahi dunia paralel dan menghadapi berbagai petualangan penuh misteri.',
-  'publisher': 'Gramedia Pustaka Utama',
-  'year': '2014',
-  'pages': '440 halaman',
+      'reviews': '9.2k ulasan',
+      'tags': ['Fantasi', 'Petualangan', 'Fiksi'],
+      'synopsis':
+          'Novel Bumi karya Tere Liye menceritakan petualangan Raib, seorang gadis yang memiliki kemampuan menghilang. Bersama kedua sahabatnya, Seli dan Ali, ia menjelajahi dunia paralel dan menghadapi berbagai petualangan penuh misteri.',
+      'publisher': 'Gramedia Pustaka Utama',
+      'year': '2014',
+      'pages': '440 halaman',
     },
     {
       'title': 'Laut Bercerita',
@@ -82,15 +77,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'cover': 'assets/images/lautbercerita.jpeg',
       'color': const Color(0xFF356B82),
       'icon': Icons.waves_rounded,
-
-      // Detail buku
-  'reviews': '12.4k ulasan',
-  'tags': ['Fiksi', 'Sastra', 'Rekomendasi'],
-  'synopsis':
-      'Novel Laut Bercerita karya Leila S. Chudori mengisahkan tentang kekejaman, penculikan, dan penghilangan paksa aktivis mahasiswa pada masa akhir Orde Baru tahun 1998.',
-  'publisher': 'Kepustakaan Populer Gramedia',
-  'year': '2017',
-  'pages': '379 halaman',
+      'reviews': '12.4k ulasan',
+      'tags': ['Fiksi', 'Sastra', 'Rekomendasi'],
+      'synopsis':
+          'Novel Laut Bercerita karya Leila S. Chudori mengisahkan tentang kekejaman, penculikan, dan penghilangan paksa aktivis mahasiswa pada masa akhir Orde Baru tahun 1998.',
+      'publisher': 'Kepustakaan Populer Gramedia',
+      'year': '2017',
+      'pages': '379 halaman',
     },
   ];
 
@@ -102,7 +95,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-            final horizontalPadding = width >= 600 ? 28.0 : 18.0;
+            final horizontalPadding =
+                width >= 600 ? 28.0 : 18.0;
 
             return CustomScrollView(
               physics: const BouncingScrollPhysics(),
@@ -146,7 +140,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ==========================================
   // HEADER
+  // ==========================================
+
   Widget _buildHeader() {
     return Row(
       children: [
@@ -178,8 +175,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const Spacer(),
         IconButton(
-          onPressed: () =>
-              _showMessage('Halaman notifikasi akan dibuat berikutnya.'),
+          onPressed: () => _showMessage(
+            'Halaman notifikasi akan dibuat berikutnya.',
+          ),
           icon: const Icon(
             Icons.notifications_none_rounded,
             color: AppColors.navy,
@@ -188,8 +186,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           visualDensity: VisualDensity.compact,
         ),
         IconButton(
-          onPressed: () =>
-              _showMessage('Halaman akun akan dibuat berikutnya.'),
+          onPressed: () => _showMessage(
+            'Halaman akun akan dibuat berikutnya.',
+          ),
           icon: const Icon(
             Icons.account_circle_rounded,
             color: AppColors.navy,
@@ -201,22 +200,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ==========================================
   // SEARCH BAR
+  // ==========================================
+
   Widget _buildSearchBar() {
     return Material(
       color: const Color(0xFFF8F4EC),
       elevation: 2,
-      shadowColor: const Color(0xFF2F4156).withOpacity(0.12),
+      shadowColor:
+          const Color(0xFF2F4156).withOpacity(0.12),
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         borderRadius: BorderRadius.circular(13),
         onTap: _openSearch,
         child: Container(
           height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+          ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: const Color(0xFFE3DED4)),
+            border: Border.all(
+              color: const Color(0xFFE3DED4),
+            ),
           ),
           child: Row(
             children: [
@@ -244,9 +251,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ==========================================
   // BANNER
+  // ==========================================
+
   Widget _buildBanner(double availableWidth) {
-    final bannerHeight = (availableWidth * 0.47).clamp(105.0, 190.0);
+    final bannerHeight =
+        (availableWidth * 0.47).clamp(105.0, 190.0);
 
     return Container(
       width: double.infinity,
@@ -262,13 +273,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ==========================================
   // SHORTCUTS
+  // ==========================================
+
   Widget _buildShortcuts() {
     final shortcuts = [
-      {'label': 'Pinjam Buku', 'icon': Icons.menu_book_rounded},
-      {'label': 'Wishlist', 'icon': Icons.favorite_border_rounded},
-      {'label': 'Riwayat', 'icon': Icons.history_rounded},
-      {'label': 'Profil', 'icon': Icons.person_outline_rounded},
+      {
+        'label': 'Pinjam Buku',
+        'icon': Icons.menu_book_rounded,
+      },
+      {
+        'label': 'Wishlist',
+        'icon': Icons.favorite_border_rounded,
+      },
+      {
+        'label': 'Riwayat',
+        'icon': Icons.history_rounded,
+      },
+      {
+        'label': 'Profil',
+        'icon': Icons.person_outline_rounded,
+      },
     ];
 
     return Row(
@@ -283,7 +309,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const CollectionScreen(),
+                    builder: (_) => const WishlistScreen(),
                   ),
                 );
               } else if (label == 'Pinjam Buku') {
@@ -298,7 +324,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 );
               } else {
-                _showMessage('Halaman $label akan dibuat berikutnya.');
+                _showMessage(
+                  'Halaman $label akan dibuat berikutnya.',
+                );
               }
             },
             child: Column(
@@ -336,7 +364,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ==========================================
   // SECTION HEADER
+  // ==========================================
+
   Widget _buildSectionHeader(
     String title,
     String action, {
@@ -358,7 +389,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: onTap,
           borderRadius: BorderRadius.circular(6),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(
+              vertical: 4,
+            ),
             child: Row(
               children: [
                 Text(
@@ -382,9 +415,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ==========================================
   // POPULAR BOOKS
+  // ==========================================
+
   Widget _buildPopularBooks(double availableWidth) {
-    final cardWidth = availableWidth < 370 ? 100.0 : 112.0;
+    final cardWidth =
+        availableWidth < 370 ? 100.0 : 112.0;
 
     return SizedBox(
       height: 205,
@@ -392,7 +429,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         clipBehavior: Clip.none,
         scrollDirection: Axis.horizontal,
         itemCount: books.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        separatorBuilder: (_, __) =>
+            const SizedBox(width: 14),
         itemBuilder: (context, index) {
           final book = books[index];
 
@@ -401,28 +439,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Material(
               color: AppColors.white,
               elevation: 5,
-              shadowColor: const Color(0xFF2F4156).withOpacity(0.18),
+              shadowColor:
+                  const Color(0xFF2F4156).withOpacity(0.18),
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
                 onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DetailBukuScreen(
-                          book: book,
-                        ),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => DetailBukuScreen(
+                        book: book,
                       ),
-                    );
-                  },
+                    ),
+                  );
+                },
                 child: Padding(
                   padding: const EdgeInsets.all(7),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius:
+                              BorderRadius.circular(8),
                           child: SizedBox(
                             width: double.infinity,
                             child: Image.asset(
@@ -494,7 +535,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ==========================================
   // BOTTOM NAVIGATION HANDLER
+  // ==========================================
+
   void _navigateTo(int index) {
     if (index == selectedNav) return;
 
@@ -532,7 +576,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ==========================================
   // NAVIGATION HELPERS
+  // ==========================================
+
   void _openSearch() {
     Navigator.push(
       context,
@@ -551,7 +598,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ==========================================
   // MESSAGE
+  // ==========================================
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

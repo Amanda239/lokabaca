@@ -1,8 +1,10 @@
 
 import 'package:flutter/material.dart';
+
 import '../../core/constants/app_colors.dart';
 import 'ulasan_buku.dart';
 import 'form_peminjaman.dart';
+import 'wishlist_store.dart';
 
 class DetailBukuScreen extends StatefulWidget {
   final Map<String, dynamic> book;
@@ -17,15 +19,29 @@ class DetailBukuScreen extends StatefulWidget {
 }
 
 class _DetailBukuScreenState extends State<DetailBukuScreen> {
-  bool isFavorite = false;
-
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.navy,
-      ),
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.navy,
+        ),
+      );
+  }
+
+  // ==========================================
+  // TOGGLE WISHLIST
+  // ==========================================
+
+  void _toggleFavorite() {
+    WishlistStore.toggle(widget.book);
+
+    _showMessage(
+      WishlistStore.isFavorite(widget.book)
+          ? 'Buku ditambahkan ke wishlist.'
+          : 'Buku dihapus dari wishlist.',
     );
   }
 
@@ -33,24 +49,27 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
   Widget build(BuildContext context) {
     final book = widget.book;
 
-    final title = book['title'] ?? 'Judul Buku';
-    final author = book['author'] ?? 'Penulis';
-    final cover = book['cover'] ?? '';
+    final title = book['title']?.toString() ?? 'Judul Buku';
+    final author = book['author']?.toString() ?? 'Penulis';
+    final cover = book['cover']?.toString() ?? '';
     final rating = book['rating'] ?? '4.9';
     final category = book['category'] ?? 'Fiksi';
 
-    final synopsis = book['synopsis'] ??
+    final synopsis = book['synopsis']?.toString() ??
         'Informasi sinopsis buku ini belum tersedia.';
 
-    final publisher = book['publisher'] ??
+    final publisher = book['publisher']?.toString() ??
         'Kepustakaan Populer Gramedia';
 
     final year = book['year'] ?? '2017';
     final pages = book['pages'] ?? '379 halaman';
     final reviews = book['reviews'] ?? '12.4k ulasan';
 
-    final tags = book['tags'] ??
-        [category, 'Sastra', 'Rekomendasi'];
+    final tags = book['tags'] ?? [
+      category,
+      'Sastra',
+      'Rekomendasi',
+    ];
 
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -62,7 +81,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                 physics: const BouncingScrollPhysics(),
                 child: Column(
                   children: [
+                    // =================================
                     // HEADER
+                    // =================================
+
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -81,8 +103,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                               size: 21,
                             ),
                           ),
+
                           Row(
                             children: [
+                              // SHARE
                               IconButton(
                                 onPressed: () => _showMessage(
                                   'Fitur berbagi buku akan segera tersedia.',
@@ -93,26 +117,28 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                                   size: 23,
                                 ),
                               ),
-                              IconButton(
-                                onPressed: () {
-                                  setState(() {
-                                    isFavorite = !isFavorite;
-                                  });
-                                  _showMessage(
-                                    isFavorite
-                                        ? 'Buku ditambahkan ke wishlist.'
-                                        : 'Buku dihapus dari wishlist.',
+
+                              // WISHLIST LOVE
+                              ValueListenableBuilder<
+                                  List<Map<String, dynamic>>>(
+                                valueListenable: WishlistStore.books,
+                                builder: (context, books, child) {
+                                  final isFavorite =
+                                      WishlistStore.isFavorite(book);
+
+                                  return IconButton(
+                                    onPressed: _toggleFavorite,
+                                    icon: Icon(
+                                      isFavorite
+                                          ? Icons.favorite_rounded
+                                          : Icons.favorite_border_rounded,
+                                      color: isFavorite
+                                          ? Colors.red
+                                          : AppColors.navy,
+                                      size: 25,
+                                    ),
                                   );
                                 },
-                                icon: Icon(
-                                  isFavorite
-                                      ? Icons.favorite_rounded
-                                      : Icons.favorite_border_rounded,
-                                  color: isFavorite
-                                      ? Colors.red
-                                      : AppColors.navy,
-                                  size: 25,
-                                ),
                               ),
                             ],
                           ),
@@ -122,7 +148,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                     const SizedBox(height: 5),
 
+                    // =================================
                     // COVER BUKU
+                    // =================================
+
                     Container(
                       width: 148,
                       height: 218,
@@ -158,7 +187,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                     const SizedBox(height: 45),
 
+                    // =================================
                     // JUDUL DAN PENULIS
+                    // =================================
+
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -174,7 +206,9 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                               fontWeight: FontWeight.w800,
                             ),
                           ),
+
                           const SizedBox(height: 5),
+
                           Text(
                             author,
                             textAlign: TextAlign.center,
@@ -190,7 +224,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                     const SizedBox(height: 12),
 
+                    // =================================
                     // RATING
+                    // =================================
+
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -218,7 +255,9 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                             color: Color(0xFFFFC83D),
                             size: 25,
                           ),
+
                           const SizedBox(width: 7),
+
                           Text(
                             '$rating',
                             style: const TextStyle(
@@ -227,7 +266,9 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                               fontSize: 13,
                             ),
                           ),
+
                           const SizedBox(width: 8),
+
                           Text(
                             '($reviews)',
                             style: const TextStyle(
@@ -241,7 +282,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                     const SizedBox(height: 18),
 
+                    // =================================
                     // KATEGORI
+                    // =================================
+
                     Wrap(
                       alignment: WrapAlignment.center,
                       spacing: 12,
@@ -281,7 +325,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                     const SizedBox(height: 23),
 
+                    // =================================
                     // SINOPSIS
+                    // =================================
+
                     Container(
                       width: double.infinity,
                       margin: const EdgeInsets.symmetric(
@@ -308,6 +355,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+
                               IconButton(
                                 onPressed: () => _showMessage(
                                   'Informasi sinopsis buku.',
@@ -320,6 +368,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                               ),
                             ],
                           ),
+
                           Text(
                             synopsis,
                             style: const TextStyle(
@@ -334,7 +383,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                     const SizedBox(height: 20),
 
+                    // =================================
                     // INFORMASI BUKU
+                    // =================================
+
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
@@ -345,12 +397,16 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                             'Penerbit',
                             publisher,
                           ),
+
                           const SizedBox(height: 15),
+
                           _buildInfoRow(
                             'Tahun Terbit',
                             '$year',
                           ),
+
                           const SizedBox(height: 15),
+
                           _buildInfoRow(
                             'Jumlah Halaman',
                             '$pages',
@@ -365,22 +421,29 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
               ),
             ),
 
+            // =================================
             // TOMBOL BAWAH
+            // =================================
+
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                14, 8, 14, 12,
+                14,
+                8,
+                14,
+                12,
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: SizedBox(
                       height: 46,
-                      child:ElevatedButton(
+                      child: ElevatedButton(
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => FormPeminjamanScreen(
+                              builder: (context) =>
+                                  FormPeminjamanScreen(
                                 book: widget.book,
                               ),
                             ),
@@ -404,27 +467,32 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                       ),
                     ),
                   ),
+
                   const SizedBox(width: 12),
+
                   _buildBottomIcon(
                     Icons.bookmark_add_outlined,
                     () => _showMessage(
                       'Buku ditambahkan ke koleksi.',
                     ),
                   ),
+
                   const SizedBox(width: 10),
+
                   _buildBottomIcon(
-  Icons.comment_rounded,
-  () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => UlasanBukuScreen(
-          book: widget.book,
-        ),
-      ),
-    );
-  },
-),
+                    Icons.comment_rounded,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              UlasanBukuScreen(
+                            book: widget.book,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -433,6 +501,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
       ),
     );
   }
+
+  // ==========================================
+  // INFO ROW
+  // ==========================================
 
   Widget _buildInfoRow(String label, String value) {
     return Row(
@@ -449,6 +521,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
             ),
           ),
         ),
+
         Expanded(
           flex: 7,
           child: Text(
@@ -463,6 +536,10 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
       ],
     );
   }
+
+  // ==========================================
+  // BOTTOM ICON
+  // ==========================================
 
   Widget _buildBottomIcon(
     IconData icon,

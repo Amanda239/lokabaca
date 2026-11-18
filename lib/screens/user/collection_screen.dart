@@ -17,6 +17,10 @@ class CollectionScreen extends StatefulWidget {
 
 class _CollectionScreenState extends State<CollectionScreen> {
   int selectedNav = 3;
+  int currentPage = 0;
+
+  static const int booksPerPage = 3;
+
   String searchQuery = '';
 
   final TextEditingController searchController =
@@ -33,7 +37,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
       'icon': Icons.auto_stories_rounded,
     },
     {
-      'title': 'Namalaku Alam',
+      'title': 'Namakua Alam',
       'author': 'Leila S. Chudori',
       'status': 'Dipinjam',
       'dueDate': '17 Juni 1997',
@@ -49,6 +53,24 @@ class _CollectionScreenState extends State<CollectionScreen> {
       'asset': 'assets/images/dompetayah.jpeg',
       'color': const Color(0xFF58AEB4),
       'icon': Icons.menu_book_rounded,
+    },
+    {
+      'title': 'Laut Bercerita',
+      'author': 'Leila S. Chudori',
+      'status': 'Dipinjam',
+      'dueDate': '20 Juni 1997',
+      'asset': 'assets/images/lautbercerita.jpeg',
+      'color': const Color(0xFF355C70),
+      'icon': Icons.waves_rounded,
+    },
+    {
+      'title': 'Bumi',
+      'author': 'Tere Liye',
+      'status': 'Dipinjam',
+      'dueDate': '22 Juni 1997',
+      'asset': 'assets/images/bumi.jpeg',
+      'color': const Color(0xFF65836A),
+      'icon': Icons.public_rounded,
     },
   ];
 
@@ -69,10 +91,31 @@ class _CollectionScreenState extends State<CollectionScreen> {
     }).toList();
   }
 
+  int get totalPages {
+    return (filteredBooks.length / booksPerPage).ceil();
+  }
+
+  List<Map<String, dynamic>> get currentBooks {
+    final startIndex = currentPage * booksPerPage;
+
+    final endIndex = (startIndex + booksPerPage)
+        .clamp(0, filteredBooks.length);
+
+    return filteredBooks.sublist(startIndex, endIndex);
+  }
+
   @override
   void dispose() {
     searchController.dispose();
     super.dispose();
+  }
+
+  void _changePage(int page) {
+    if (page < 0 || page >= totalPages) return;
+
+    setState(() {
+      currentPage = page;
+    });
   }
 
   // NAVIGASI ANTAR HALAMAN
@@ -114,6 +157,8 @@ class _CollectionScreenState extends State<CollectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final displayedBooks = currentBooks;
+
     return Scaffold(
       backgroundColor: AppColors.navy,
       body: SafeArea(
@@ -122,64 +167,74 @@ class _CollectionScreenState extends State<CollectionScreen> {
             final horizontalPadding =
                 constraints.maxWidth >= 600 ? 32.0 : 16.0;
 
-            return Column(
-              children: [
-                Expanded(
-                  child: CustomScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    slivers: [
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          horizontalPadding,
-                          20,
-                          horizontalPadding,
-                          20,
-                        ),
-                        sliver: SliverList(
-                          delegate: SliverChildListDelegate([
-                            _buildHeader(),
-                            const SizedBox(height: 28),
-                            _buildSearchField(),
-                            const SizedBox(height: 20),
-                          ]),
-                        ),
-                      ),
-
-                      SliverPadding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: horizontalPadding,
-                        ),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.only(bottom: 18),
-                                child: _buildBookCard(
-                                  filteredBooks[index],
-                                ),
-                              );
-                            },
-                            childCount: filteredBooks.length,
-                          ),
-                        ),
-                      ),
-
-                      if (filteredBooks.isEmpty)
-                        SliverPadding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: horizontalPadding,
-                          ),
-                          sliver: SliverToBoxAdapter(
-                            child: _buildEmptyState(),
-                          ),
-                        ),
-
-                      const SliverToBoxAdapter(
-                        child: SizedBox(height: 16),
-                      ),
-                    ],
+            return CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // HEADER DAN SEARCH
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    20,
+                    horizontalPadding,
+                    20,
                   ),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _buildHeader(),
+                      const SizedBox(height: 28),
+                      _buildSearchField(),
+                      const SizedBox(height: 20),
+                    ]),
+                  ),
+                ),
+
+                // DAFTAR BUKU: 3 BUKU PER HALAMAN
+                if (displayedBooks.isNotEmpty)
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                    ),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          return Padding(
+                            padding:
+                                const EdgeInsets.only(bottom: 18),
+                            child: _buildBookCard(
+                              displayedBooks[index],
+                            ),
+                          );
+                        },
+                        childCount: displayedBooks.length,
+                      ),
+                    ),
+                  ),
+
+                // EMPTY STATE
+                if (filteredBooks.isEmpty)
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: _buildEmptyState(),
+                    ),
+                  ),
+
+                // PAGINATION
+                if (totalPages > 1)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        top: 4,
+                        bottom: 24,
+                      ),
+                      child: _buildPagination(),
+                    ),
+                  ),
+
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 16),
                 ),
               ],
             );
@@ -250,6 +305,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
         onChanged: (value) {
           setState(() {
             searchQuery = value;
+            currentPage = 0;
           });
         },
         style: const TextStyle(
@@ -274,6 +330,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
 
                     setState(() {
                       searchQuery = '';
+                      currentPage = 0;
                     });
                   },
                   padding: EdgeInsets.zero,
@@ -416,6 +473,76 @@ class _CollectionScreenState extends State<CollectionScreen> {
           ),
         );
       },
+    );
+  }
+
+  // PAGINATION
+  Widget _buildPagination() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          onPressed: currentPage > 0
+              ? () => _changePage(currentPage - 1)
+              : null,
+          icon: const Icon(
+            Icons.chevron_left_rounded,
+            size: 25,
+          ),
+          color: AppColors.white,
+          disabledColor: AppColors.grey.withOpacity(0.4),
+        ),
+
+        const SizedBox(width: 8),
+
+        ...List.generate(totalPages, (index) {
+          final isSelected = currentPage == index;
+
+          return GestureDetector(
+            onTap: () => _changePage(index),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              width: 29,
+              height: 29,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? AppColors.white
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.white,
+                ),
+              ),
+              child: Text(
+                '${index + 1}',
+                style: TextStyle(
+                  color: isSelected
+                      ? AppColors.navy
+                      : AppColors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          );
+        }),
+
+        const SizedBox(width: 8),
+
+        IconButton(
+          onPressed: currentPage < totalPages - 1
+              ? () => _changePage(currentPage + 1)
+              : null,
+          icon: const Icon(
+            Icons.chevron_right_rounded,
+            size: 25,
+          ),
+          color: AppColors.white,
+          disabledColor: AppColors.grey.withOpacity(0.4),
+        ),
+      ],
     );
   }
 

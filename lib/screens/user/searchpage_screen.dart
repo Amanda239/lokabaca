@@ -7,6 +7,7 @@ import 'dashboard_screen.dart';
 import 'collection_screen.dart';
 import 'peminjaman_screen.dart';
 import 'profile_screen.dart';
+import 'all_books_screen.dart';
 
 class SearchPageScreen extends StatefulWidget {
   const SearchPageScreen({super.key});
@@ -200,17 +201,20 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                   const SizedBox(height: 23),
 
                   // RECOMMENDATION HEADER
+                  // RECOMMENDATION HEADER
                   _buildSectionHeader(
                     'Rekomendasi untukmu',
                     '',
                     trailing: 'Lihat Semua',
                     onTrailingTap: () {
-                      setState(() {
-                        selectedCategory = 'Semua';
-                        searchQuery = '';
-                        searchController.clear();
-                        selectedSort = 'Rekomendasi';
-                      });
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AllBooksScreen(
+                            books: books,
+                          ),
+                        ),
+                      );
                     },
                   ),
 
