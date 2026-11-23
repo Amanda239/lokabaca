@@ -2,7 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/services/notification_service.dart';
+import '../../widgets/book_cover.dart';
 import 'admin_bottom_navigation.dart';
+import 'denda_admin_screen.dart';
 import 'detail_peminjaman.dart';
 
 // Halaman untuk navigasi bottom navigation
@@ -21,9 +25,9 @@ class PeminjamanAdminScreen extends StatefulWidget {
 
 class _PeminjamanAdminScreenState
     extends State<PeminjamanAdminScreen> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color muted = Color(0xFF8993A1);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color muted = AppColors.grey;
 
   final supabase = Supabase.instance.client;
 
@@ -48,6 +52,14 @@ class _PeminjamanAdminScreenState
   void initState() {
     super.initState();
     loadBorrowings();
+    NotificationService.runChecks().whenComplete(() {
+      if (mounted) loadBorrowings();
+    });
+  }
+
+  Future<void> refresh() async {
+    await NotificationService.runChecks();
+    await loadBorrowings();
   }
 
   // =====================================================
@@ -431,6 +443,10 @@ class _PeminjamanAdminScreenState
         break;
 
       case 4:
+        page = const DendaAdminScreen();
+        break;
+
+      case 5:
         page = const ProfileAdminScreen();
         break;
 
@@ -511,7 +527,7 @@ class _PeminjamanAdminScreenState
           ),
 
           IconButton(
-            onPressed: loadBorrowings,
+            onPressed: refresh,
             icon: const Icon(
               Icons.refresh_rounded,
               color: navy,
@@ -568,7 +584,7 @@ class _PeminjamanAdminScreenState
         Expanded(
           child: RefreshIndicator(
             color: navy,
-            onRefresh: loadBorrowings,
+            onRefresh: refresh,
             child: data.isEmpty
                 ? ListView(
                     physics:
@@ -579,7 +595,7 @@ class _PeminjamanAdminScreenState
                       Icon(
                         Icons.menu_book_outlined,
                         size: 55,
-                        color: muted.withOpacity(0.6),
+                        color: muted.withValues(alpha: 0.6),
                       ),
 
                       const SizedBox(height: 12),
@@ -695,7 +711,7 @@ class _PeminjamanAdminScreenState
                       ),
                       decoration: BoxDecoration(
                         color: selected
-                            ? Colors.white.withOpacity(0.18)
+                            ? Colors.white.withValues(alpha: 0.18)
                             : const Color(0xFFE8E1D2),
                         borderRadius:
                             BorderRadius.circular(12),
@@ -706,7 +722,7 @@ class _PeminjamanAdminScreenState
                           color: selected
                               ? Colors.white
                               : navy,
-                          fontSize: 9,
+                          fontSize: 10,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -781,13 +797,13 @@ class _PeminjamanAdminScreenState
         decoration: BoxDecoration(
           color: Colors.white,
           border: Border.all(
-            color: const Color(0xFFE2E5E9),
+            color: AppColors.border,
             width: 0.9,
           ),
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: navy.withOpacity(0.06),
+              color: navy.withValues(alpha: 0.06),
               blurRadius: 6,
               offset: const Offset(0, 3),
             ),
@@ -795,7 +811,12 @@ class _PeminjamanAdminScreenState
         ),
         child: Row(
           children: [
-            _buildBookCover(cover),
+            BookCover(
+              imageUrl: cover,
+              width: 51,
+              height: 75,
+              radius: 7,
+            ),
 
             const SizedBox(width: 11),
 
@@ -824,7 +845,7 @@ class _PeminjamanAdminScreenState
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: muted,
-                      fontSize: 9,
+                      fontSize: 10,
                     ),
                   ),
 
@@ -847,7 +868,7 @@ class _PeminjamanAdminScreenState
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: navy,
-                            fontSize: 9,
+                            fontSize: 10,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -871,7 +892,7 @@ class _PeminjamanAdminScreenState
                         formatDate(borrowedDate),
                         style: const TextStyle(
                           color: muted,
-                          fontSize: 8,
+                          fontSize: 10,
                         ),
                       ),
                     ],
@@ -895,47 +916,13 @@ class _PeminjamanAdminScreenState
                 status,
                 style: TextStyle(
                   color: statusTextColor,
-                  fontSize: 8,
+                  fontSize: 10,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  // =====================================================
-  // COVER BUKU
-  // =====================================================
-
-  Widget _buildBookCover(String url) {
-    return Container(
-      width: 51,
-      height: 75,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: url.isNotEmpty
-          ? Image.network(
-              url,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  _coverFallback(),
-            )
-          : _coverFallback(),
-    );
-  }
-
-  Widget _coverFallback() {
-    return const Center(
-      child: Icon(
-        Icons.menu_book_rounded,
-        color: navy,
-        size: 27,
       ),
     );
   }

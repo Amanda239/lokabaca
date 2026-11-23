@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/app_colors.dart';
+
 class AdminBottomNavigation extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -10,9 +12,9 @@ class AdminBottomNavigation extends StatelessWidget {
     required this.onTap,
   });
 
-  static const Color navy = Color(0xFF2F4156);
+  static const Color navy = AppColors.navy;
   static const Color inactiveColor = Color(0xFF5B5344);
-  static const Color backgroundColor = Color(0xFFEAE7DC);
+  static const Color backgroundColor = AppColors.input;
 
   final List<NavigationItem> _items = const [
     NavigationItem(
@@ -36,6 +38,11 @@ class AdminBottomNavigation extends StatelessWidget {
       activeIcon: Icons.auto_stories,
     ),
     NavigationItem(
+      label: 'Denda',
+      icon: Icons.account_balance_wallet_outlined,
+      activeIcon: Icons.account_balance_wallet,
+    ),
+    NavigationItem(
       label: 'Akun',
       icon: Icons.person_outline,
       activeIcon: Icons.person,
@@ -49,7 +56,7 @@ class AdminBottomNavigation extends StatelessWidget {
         color: backgroundColor,
         border: Border(
           top: BorderSide(
-            color: Color(0xFFD6D1C4),
+            color: AppColors.border,
             width: 1,
           ),
         ),
@@ -57,7 +64,7 @@ class AdminBottomNavigation extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 68,
+          height: 64,
           child: Row(
             children: List.generate(_items.length, (index) {
               final item = _items[index];
@@ -71,16 +78,16 @@ class AdminBottomNavigation extends StatelessWidget {
                     children: [
                       Icon(
                         isSelected ? item.activeIcon : item.icon,
-                        size: 25,
+                        size: 22,
                         color: isSelected ? navy : inactiveColor,
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         item.label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10,
                           fontWeight: isSelected
                               ? FontWeight.w700
                               : FontWeight.w500,

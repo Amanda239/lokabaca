@@ -1,9 +1,10 @@
-
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/wishlist_service.dart';
+import '../../widgets/book_cover.dart';
+import '../../widgets/catalog_controls.dart';
 import 'detail_buku_screen.dart';
-import 'wishlist_store.dart';
 
 class WishlistScreen extends StatefulWidget {
   const WishlistScreen({super.key});
@@ -13,25 +14,49 @@ class WishlistScreen extends StatefulWidget {
 }
 
 class _WishlistScreenState extends State<WishlistScreen> {
-  static const int booksPerPage = 6;
-
-  final PageController pageController = PageController();
-
+  List<Map<String, dynamic>> _books = [];
   int currentPage = 0;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WishlistService.ids.addListener(_onIdsChanged);
+    WishlistService.load().then((_) => _loadBooks());
+  }
 
   @override
   void dispose() {
-    pageController.dispose();
+    WishlistService.ids.removeListener(_onIdsChanged);
     super.dispose();
   }
 
-  // ==========================================
-  // REMOVE BOOK FROM WISHLIST
-  // ==========================================
+  void _onIdsChanged() => _loadBooks();
 
-  void _removeBook(Map<String, dynamic> book) {
-    WishlistStore.toggle(book);
+  Future<void> _loadBooks() async {
+    final books = await WishlistService.books();
+    if (!mounted) return;
+    setState(() {
+      _books = books;
+      final pages = (books.length / 10).ceil();
+      if (pages == 0) {
+        currentPage = 0;
+      } else if (currentPage >= pages) {
+        currentPage = pages - 1;
+      }
+      isLoading = false;
+    });
+  }
 
+  void _goToPage(int page) {
+    if (page < 0 || page * 10 >= _books.length) return;
+    setState(() => currentPage = page);
+  }
+
+  // HAPUS DARI WISHLIST (SUPABASE)
+  Future<void> _removeBook(Map<String, dynamic> book) async {
+    await WishlistService.remove('${book['id']}');
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -41,156 +66,58 @@ class _WishlistScreenState extends State<WishlistScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-
-    final totalBooks = WishlistStore.books.value.length;
-    final totalPages = (totalBooks / booksPerPage).ceil();
-
-    if (totalPages == 0) {
-      setState(() {
-        currentPage = 0;
-      });
-    } else if (currentPage >= totalPages) {
-      final newPage = totalPages - 1;
-
-      setState(() {
-        currentPage = newPage;
-      });
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && pageController.hasClients) {
-          pageController.jumpToPage(newPage);
-        }
-      });
-    } else {
-      setState(() {});
-    }
   }
-
-  // ==========================================
-  // BUILD
-  // ==========================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
-
+            ValueListenableBuilder<List<String>>(
+              valueListenable: WishlistService.ids,
+              builder: (context, ids, _) => _buildHeader(ids.length),
+            ),
             Expanded(
-              child: ValueListenableBuilder<
-                  List<Map<String, dynamic>>>(
-                valueListenable: WishlistStore.books,
-                builder: (context, books, child) {
-                  if (books.isEmpty) {
-                    return _buildEmptyWishlist();
+              child: ValueListenableBuilder<List<String>>(
+                valueListenable: WishlistService.ids,
+                builder: (context, ids, child) {
+                  if (isLoading) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: AppColors.navy),
+                    );
                   }
 
-                  final totalPages =
-                      (books.length / booksPerPage).ceil();
+                  if (_books.isEmpty) return _buildEmptyWishlist();
+
+                  final start = currentPage * 10;
+                  final end = (start + 10).clamp(0, _books.length);
+                  final pageBooks = _books.sublist(start, end);
 
                   return Column(
                     children: [
-                      // ==================================
-                      // PAGE VIEW
-                      // ==================================
-
                       Expanded(
-                        child: PageView.builder(
-                          controller: pageController,
-                          itemCount: totalPages,
-                          onPageChanged: (index) {
-                            setState(() {
-                              currentPage = index;
-                            });
-                          },
-                          itemBuilder: (context, pageIndex) {
-                            final startIndex =
-                                pageIndex * booksPerPage;
-
-                            final endIndex =
-                                (startIndex + booksPerPage)
-                                    .clamp(0, books.length);
-
-                            final pageBooks =
-                                books.sublist(startIndex, endIndex);
-
-                            return Center(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 520,
-                                ),
-                                child: GridView.builder(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    20,
-                                    12,
-                                    20,
-                                    25,
-                                  ),
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  gridDelegate:
-                                      const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    crossAxisSpacing: 18,
-                                    mainAxisSpacing: 18,
-                                    childAspectRatio: 0.78,
-                                  ),
-                                  itemCount: pageBooks.length,
-                                  itemBuilder: (context, index) {
-                                    final book = pageBooks[index];
-
-                                    return _buildBookCard(book);
-                                  },
-                                ),
-                              ),
-                            );
-                          },
+                        child: GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 14,
+                            mainAxisSpacing: 14,
+                            childAspectRatio: 0.66,
+                          ),
+                          itemCount: pageBooks.length,
+                          itemBuilder: (context, index) =>
+                              _buildBookCard(pageBooks[index]),
                         ),
                       ),
-
-                      // ==================================
-                      // PAGE INDICATOR
-                      // ==================================
-
-                      if (totalPages > 1)
-                        Padding(
-                          padding: const EdgeInsets.only(
-                            bottom: 20,
-                            top: 8,
-                          ),
-                          child: Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.center,
-                            children: List.generate(
-                              totalPages,
-                              (index) {
-                                final isActive =
-                                    currentPage == index;
-
-                                return AnimatedContainer(
-                                  duration: const Duration(
-                                    milliseconds: 200,
-                                  ),
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  width: isActive ? 20 : 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                    color: isActive
-                                        ? AppColors.navy
-                                        : Colors.grey.shade300,
-                                    borderRadius:
-                                        BorderRadius.circular(10),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
+                      CatalogPagination(
+                        page: currentPage,
+                        totalItems: _books.length,
+                        onPrevious: () => _goToPage(currentPage - 1),
+                        onNext: () => _goToPage(currentPage + 1),
+                      ),
                     ],
                   );
                 },
@@ -202,11 +129,8 @@ class _WishlistScreenState extends State<WishlistScreen> {
     );
   }
 
-  // ==========================================
   // HEADER
-  // ==========================================
-
-  Widget _buildHeader() {
+  Widget _buildHeader(int count) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       child: Row(
@@ -219,143 +143,98 @@ class _WishlistScreenState extends State<WishlistScreen> {
               size: 21,
             ),
           ),
-
-          const Expanded(
+          Expanded(
             child: Text(
-              'Wishlist',
+              'Wishlist ($count)',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
                 color: AppColors.navy,
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
               ),
             ),
           ),
-
           const SizedBox(width: 48),
         ],
       ),
     );
   }
 
-  // ==========================================
-  // BOOK CARD
-  // ==========================================
-
+  // CARD BUKU (KOMPAK)
   Widget _buildBookCard(Map<String, dynamic> book) {
     final title = book['title']?.toString() ?? 'Judul Buku';
     final author = book['author']?.toString() ?? 'Penulis';
-    final cover = book['cover']?.toString() ?? '';
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DetailBukuScreen(book: book),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: const Color(0xFFE5E5E5),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.13),
-              blurRadius: 5,
-              offset: const Offset(0, 2),
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(12),
+      elevation: 2,
+      shadowColor: AppColors.navy.withValues(alpha: 0.12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DetailBukuScreen(book: book),
             ),
-          ],
-        ),
+          );
+        },
         child: Stack(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 15, 10, 12),
+              padding: const EdgeInsets.fromLTRB(9, 12, 9, 11),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // BOOK COVER
-                  Expanded(
-                    child: Center(
-                      child: Container(
-                        width: 115,
-                        constraints: const BoxConstraints(
-                          maxHeight: 165,
-                        ),
-                        decoration: BoxDecoration(
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.20),
-                              blurRadius: 4,
-                              offset: const Offset(2, 3),
-                            ),
-                          ],
-                        ),
-                        child: cover.isNotEmpty
-                            ? Image.asset(
-                                cover,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) {
-                                  return _coverPlaceholder();
-                                },
-                              )
-                            : _coverPlaceholder(),
-                      ),
+                  BookCover(
+                    imageUrl: book['cover_url'] ?? book['cover'],
+                    width: double.infinity,
+                    height: 156,
+                    radius: 9,
+                  ),
+                  const SizedBox(height: 9),
+                  Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      height: 1.25,
                     ),
                   ),
-
-                  const SizedBox(height: 12),
-
-                  // BOOK TITLE
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-
                   const SizedBox(height: 3),
-
-                  // AUTHOR
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      author,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 10,
-                      ),
+                  Text(
+                    author,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.grey,
+                      fontSize: 9,
                     ),
                   ),
                 ],
               ),
             ),
-
-            // LOVE BUTTON
             Positioned(
-              top: 8,
-              left: 8,
+              top: 7,
+              left: 7,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => _removeBook(book),
-                child: const Padding(
-                  padding: EdgeInsets.all(3),
-                  child: Icon(
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withValues(alpha: 0.9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
                     Icons.favorite_rounded,
                     color: Color(0xFFE8324A),
-                    size: 22,
+                    size: 19,
                   ),
                 ),
               ),
@@ -366,26 +245,7 @@ class _WishlistScreenState extends State<WishlistScreen> {
     );
   }
 
-  // ==========================================
-  // COVER PLACEHOLDER
-  // ==========================================
-
-  Widget _coverPlaceholder() {
-    return Container(
-      color: const Color(0xFFEEF1F5),
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.menu_book_rounded,
-        color: AppColors.navy,
-        size: 40,
-      ),
-    );
-  }
-
-  // ==========================================
   // EMPTY WISHLIST
-  // ==========================================
-
   Widget _buildEmptyWishlist() {
     return Center(
       child: Column(
@@ -394,11 +254,9 @@ class _WishlistScreenState extends State<WishlistScreen> {
           Icon(
             Icons.favorite_border_rounded,
             size: 65,
-            color: Colors.grey.shade300,
+            color: AppColors.grey.withValues(alpha: 0.4),
           ),
-
           const SizedBox(height: 12),
-
           const Text(
             'Wishlist masih kosong',
             style: TextStyle(
@@ -407,16 +265,11 @@ class _WishlistScreenState extends State<WishlistScreen> {
               fontWeight: FontWeight.w700,
             ),
           ),
-
           const SizedBox(height: 5),
-
           const Text(
-            'Tekan ikon love pada buku untuk menyimpannya.',
+            'Tekan ikon love pada buku untuk menyimpannya ke wishlist.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: AppColors.grey, fontSize: 11),
           ),
         ],
       ),

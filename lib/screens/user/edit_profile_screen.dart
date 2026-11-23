@@ -1,10 +1,12 @@
 
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final Map<String, dynamic> profile;
@@ -19,12 +21,15 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color textColor = Color(0xFF304258);
-  static const Color mutedText = Color(0xFF8993A1);
-  static const Color borderColor = Color(0xFFD8D4CB);
-  static const Color yellow = Color(0xFFF7C957);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color textColor = AppColors.text;
+  static const Color mutedText = AppColors.grey;
+  static const Color borderColor = AppColors.border;
+  static const Color yellow = AppColors.yellow;
+
+  /// Batas ukuran foto profil setelah diproses.
+  static const int maxPhotoBytes = 2 * 1024 * 1024;
 
   final SupabaseClient supabase = Supabase.instance.client;
   final ImagePicker picker = ImagePicker();
@@ -64,9 +69,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // LOAD PROFILE
 
   Future<void> loadProfile() async {
-    final user = supabase.auth.currentUser;
+    final userId = AuthService.currentUserId;
 
-    if (user == null) {
+    if (userId == null) {
       if (!mounted) return;
       showMessage('Sesi login tidak ditemukan.');
       Navigator.pop(context);
@@ -74,15 +79,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
 
     try {
-      final data = await supabase
-          .from('profiles')
-          .select(
-            'id, full_name, phone, birth_date, gender, avatar_url',
-          )
-          .eq('id', user.id)
-          .single();
+      final data = await AuthService.currentProfile();
 
       if (!mounted) return;
+      if (data == null) throw Exception('Profil belum tersedia.');
 
       setState(() {
         nameController.text = data['full_name']?.toString() ?? '';
@@ -215,27 +215,77 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // PICK AND CROP PHOTO
 
+  bool _isCancelled(dynamic error) {
+    final text = error?.toString().toLowerCase() ?? '';
+    return text.contains('cancel') ||
+        text.contains('cancelled') ||
+        text.contains('canceled');
+  }
+
   Future<void> pickProfilePhoto() async {
+    XFile? image;
+
+    // 1. Ambil dari galeri. Pembatalan user tidak menampilkan error.
     try {
-      final XFile? image = await picker.pickImage(
+      image = await picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 95,
+        imageQuality: 90,
+        maxWidth: 1600,
+        maxHeight: 1600,
       );
+    } on PlatformException catch (e) {
+      if (_isCancelled(e)) return;
+      debugPrint('PICK PHOTO ERROR: $e');
+      showMessage('Gagal membuka galeri foto.');
+      return;
+    } catch (e) {
+      debugPrint('PICK PHOTO ERROR: $e');
+      showMessage('Gagal memilih foto dari galeri.');
+      return;
+    }
 
-      if (image == null) return;
+    if (image == null) return;
 
-      final extension = image.name.split('.').last.toLowerCase();
+    final extension = image.name.split('.').last.toLowerCase();
 
-      if (!['jpg', 'jpeg', 'png'].contains(extension)) {
-        showMessage('Format foto harus JPG, JPEG, atau PNG.');
-        return;
-      }
+    if (!['jpg', 'jpeg', 'png'].contains(extension)) {
+      showMessage('Format foto harus JPG, JPEG, atau PNG.');
+      return;
+    }
 
+    // 2. Baca & periksa ukuran sebelum crop.
+    Uint8List originalBytes;
+    try {
+      originalBytes = await image.readAsBytes();
+    } catch (e) {
+      debugPrint('READ PHOTO ERROR: $e');
+      showMessage('Foto tidak dapat dibaca. Silakan pilih foto lain.');
+      return;
+    }
+
+    if (originalBytes.isEmpty) {
+      showMessage('Foto kosong. Silakan pilih foto lain.');
+      return;
+    }
+
+    if (originalBytes.length > maxPhotoBytes) {
+      showMessage(
+        'Ukuran foto lebih dari 2 MB. Silakan pilih foto lain.',
+      );
+      return;
+    }
+
+    // 3. Crop. Gagal crop memakai foto asli; pembatalan diabaikan.
+    Uint8List? finalBytes;
+
+    if (!mounted) return;
+
+    try {
       final CroppedFile? croppedImage =
           await ImageCropper().cropImage(
         sourcePath: image.path,
         compressFormat: ImageCompressFormat.jpg,
-        compressQuality: 90,
+        compressQuality: 85,
         aspectRatio: const CropAspectRatio(
           ratioX: 1,
           ratioY: 1,
@@ -272,68 +322,66 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (croppedImage == null) return;
 
-      final bytes = await croppedImage.readAsBytes();
-
-      if (bytes.isEmpty) {
-        showMessage('Hasil crop foto tidak valid.');
-        return;
-      }
-
-      if (bytes.length > 2 * 1024 * 1024) {
-        showMessage(
-          'Ukuran foto lebih dari 2 MB. Silakan pilih foto lain.',
-        );
-        return;
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        selectedImageBytes = bytes;
-      });
-
-      showMessage('Foto berhasil diatur!');
+      final croppedBytes = await croppedImage.readAsBytes();
+      if (croppedBytes.isNotEmpty) finalBytes = croppedBytes;
     } catch (e) {
-      debugPrint('PICK/CROP PHOTO ERROR: $e');
-
-      if (!mounted) return;
-
-      showMessage('Gagal memilih atau mengatur foto: $e');
+      if (_isCancelled(e)) return;
+      debugPrint('CROP PHOTO ERROR: $e');
+      finalBytes = originalBytes;
+      showMessage('Gagal memotong foto, foto asli yang digunakan.');
     }
+
+    final bytes = finalBytes ?? originalBytes;
+
+    if (bytes.isEmpty || bytes.length > maxPhotoBytes) {
+      showMessage(
+        'Ukuran foto lebih dari 2 MB. Silakan pilih foto lain.',
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      selectedImageBytes = bytes;
+    });
+
+    showMessage('Foto berhasil diatur!');
   }
 
   // UPLOAD AVATAR
+  // Mengembalikan URL publik Supabase Storage. null = upload gagal.
 
   Future<String?> uploadAvatar() async {
-    if (selectedImageBytes == null) {
-      return avatarUrl;
-    }
+    final bytes = selectedImageBytes;
+    if (bytes == null || bytes.isEmpty) return avatarUrl;
 
-    final user = supabase.auth.currentUser;
-
-    if (user == null) {
-      throw Exception('Pengguna belum login.');
-    }
+    final userId = AuthService.currentUserId;
+    if (userId == null) return null;
 
     final fileName =
         'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final filePath = '$userId/$fileName';
 
-    final filePath = '${user.id}/$fileName';
+    try {
+      await supabase.storage
+          .from('profile-avatars')
+          .uploadBinary(
+            filePath,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: true,
+            ),
+          );
 
-    await supabase.storage
-        .from('profile-avatars')
-        .uploadBinary(
-          filePath,
-          selectedImageBytes!,
-          fileOptions: const FileOptions(
-            contentType: 'image/jpeg',
-            upsert: false,
-          ),
-        );
-
-    return supabase.storage
-        .from('profile-avatars')
-        .getPublicUrl(filePath);
+      return supabase.storage
+          .from('profile-avatars')
+          .getPublicUrl(filePath);
+    } catch (e) {
+      debugPrint('UPLOAD AVATAR ERROR: $e');
+      return null;
+    }
   }
 
   // SAVE PROFILE
@@ -351,9 +399,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
-    final user = supabase.auth.currentUser;
-
-    if (user == null) {
+    if (AuthService.currentUserId == null) {
       showMessage('Silakan login kembali.');
       return;
     }
@@ -365,25 +411,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final newAvatarUrl = await uploadAvatar();
 
-      await supabase.from('profiles').update({
+      final changes = <String, dynamic>{
         'full_name': nameController.text.trim(),
         'phone': phoneController.text.trim(),
         'birth_date': _dateForDatabase(),
         'gender': selectedGender,
-        'avatar_url': newAvatarUrl,
-      }).eq('id', user.id);
+      };
+
+      // Foto gagal upload tidak boleh menghilangkan perubahan data lain.
+      if (newAvatarUrl != null) {
+        changes['avatar_url'] = newAvatarUrl;
+      }
+
+      await AuthService.updateProfile(changes);
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text('Profil berhasil diperbarui!'),
-            backgroundColor: navy,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      final photoUploadFailed =
+          newAvatarUrl == null && selectedImageBytes != null;
+
+      setState(() {
+        if (newAvatarUrl != null) avatarUrl = newAvatarUrl;
+        selectedImageBytes = null;
+        isSaving = false;
+      });
+
+      showMessage(
+        photoUploadFailed
+            ? 'Profil tersimpan, tetapi foto gagal diunggah. '
+                'Perubahan lain berhasil disimpan.'
+            : 'Profil berhasil diperbarui!',
+      );
 
       Navigator.pop(context, true);
     } catch (e) {
@@ -582,7 +640,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: navy.withOpacity(0.13),
+                      color: navy.withValues(alpha: 0.13),
                       blurRadius: 15,
                       offset: const Offset(0, 5),
                     ),
@@ -887,7 +945,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   // EMAIL FIELD
 
   Widget _buildEmailField() {
-    final email = supabase.auth.currentUser?.email ?? '-';
+    final email = AuthService.currentEmail ?? '-';
 
     return Container(
       width: double.infinity,

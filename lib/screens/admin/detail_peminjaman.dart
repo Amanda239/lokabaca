@@ -2,7 +2,16 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/services/notification_service.dart';
+import '../../widgets/book_cover.dart';
 import 'admin_bottom_navigation.dart';
+import 'dashboard_admin.dart';
+import 'denda_admin_screen.dart';
+import 'kelola_anggota.dart';
+import 'kelola_buku.dart';
+import 'peminjaman_admin.dart';
+import 'profile_admin.dart';
 
 class DetailPeminjamanScreen extends StatefulWidget {
   final dynamic borrowingId;
@@ -19,10 +28,10 @@ class DetailPeminjamanScreen extends StatefulWidget {
 
 class _DetailPeminjamanScreenState
     extends State<DetailPeminjamanScreen> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color textColor = Color(0xFF304258);
-  static const Color muted = Color(0xFF8993A1);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color textColor = AppColors.text;
+  static const Color muted = AppColors.grey;
 
   final supabase = Supabase.instance.client;
 
@@ -224,6 +233,20 @@ class _DetailPeminjamanScreenState
         },
       );
 
+      // Status hasil aksi RPC harus sampai ke notifikasi peminjam.
+      final resultStatus = switch (action) {
+        'approve' => 'Dipinjam',
+        'reject' => 'Ditolak',
+        'confirm_return' => 'Selesai',
+        _ => '',
+      };
+      if (resultStatus.isNotEmpty) {
+        await NotificationService.notifyBorrowingStatus(
+          widget.borrowingId.toString(),
+          resultStatus,
+        );
+      }
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -321,6 +344,16 @@ class _DetailPeminjamanScreenState
         .toLowerCase();
   }
 
+  /// Form peminjaman pengguna menyimpan status 'Menunggu' (atau variannya).
+  bool get isPendingApproval {
+    return [
+      'menunggu',
+      'menunggu konfirmasi',
+      'pending',
+      'waiting',
+    ].contains(rawStatus);
+  }
+
   String get statusText {
     if (borrowing == null) return '-';
 
@@ -365,7 +398,7 @@ class _DetailPeminjamanScreenState
       return 'Dikembalikan';
     }
 
-    if (status == 'menunggu') return 'Menunggu';
+    if (isPendingApproval) return 'Menunggu';
 
     if (status == 'ditolak') return 'Ditolak';
 
@@ -417,7 +450,7 @@ class _DetailPeminjamanScreenState
   // =====================================================
 
   Widget _buildActionButtons() {
-    if (rawStatus == 'menunggu') {
+    if (isPendingApproval) {
       return Row(
         children: [
           Expanded(
@@ -779,14 +812,18 @@ class _DetailPeminjamanScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(
-          color: navy.withOpacity(0.7),
+          color: navy.withValues(alpha: 0.7),
         ),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _buildBookCover(cover),
+          BookCover(
+            imageUrl: cover,
+            width: 68,
+            height: 102,
+          ),
           const SizedBox(width: 11),
 
           Expanded(
@@ -809,7 +846,7 @@ class _DetailPeminjamanScreenState
                   author,
                   style: const TextStyle(
                     color: muted,
-                    fontSize: 9,
+                    fontSize: 10,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -818,7 +855,7 @@ class _DetailPeminjamanScreenState
                     additionalInfo,
                     style: const TextStyle(
                       color: muted,
-                      fontSize: 9,
+                      fontSize: 10,
                     ),
                   ),
                 const SizedBox(height: 16),
@@ -844,36 +881,6 @@ class _DetailPeminjamanScreenState
     );
   }
 
-  Widget _buildBookCover(String url) {
-    return Container(
-      width: 68,
-      height: 102,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: url.isNotEmpty
-          ? Image.network(
-              url,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  _coverPlaceholder(),
-            )
-          : _coverPlaceholder(),
-    );
-  }
-
-  Widget _coverPlaceholder() {
-    return const Center(
-      child: Icon(
-        Icons.menu_book_rounded,
-        color: navy,
-        size: 30,
-      ),
-    );
-  }
-
   // =====================================================
   // MEMBER CARD
   // =====================================================
@@ -895,7 +902,7 @@ class _DetailPeminjamanScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(
-          color: navy.withOpacity(0.7),
+          color: navy.withValues(alpha: 0.7),
         ),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -985,7 +992,7 @@ class _DetailPeminjamanScreenState
       decoration: BoxDecoration(
         color: cream,
         border: Border.all(
-          color: const Color(0xFFB8B9B7),
+          color: AppColors.border,
         ),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -1057,7 +1064,7 @@ class _DetailPeminjamanScreenState
                         statusText,
                         style: TextStyle(
                           color: statusTextColor,
-                          fontSize: 9,
+                          fontSize: 10,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -1186,20 +1193,24 @@ class _DetailPeminjamanScreenState
   void _handleBottomNavigation(int index) {
     if (index == 3) return;
 
-    if (index == 0) {
-      Navigator.popUntil(
-        context,
-        (route) => route.isFirst,
-      );
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Silakan pilih menu melalui navigasi utama.',
-        ),
-      ),
+    final Widget page = switch (index) {
+      0 || 1 || 2 || 4 || 5 => _adminPage(index),
+      _ => const DashboardAdmin(),
+    };
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => page),
     );
+  }
+
+  Widget _adminPage(int index) {
+    return switch (index) {
+      0 => const DashboardAdmin(),
+      1 => const KelolaBukuScreen(),
+      2 => const KelolaAnggotaPage(),
+      4 => const DendaAdminScreen(),
+      5 => const ProfileAdminScreen(),
+      _ => const PeminjamanAdminScreen(),
+    };
   }
 }

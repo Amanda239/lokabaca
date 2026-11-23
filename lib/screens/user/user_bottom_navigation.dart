@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 
@@ -24,37 +23,37 @@ class UserBottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFAF6EC),
+        color: AppColors.cream,
         border: Border(
           top: BorderSide(
-            color: AppColors.border.withOpacity(0.8),
+            color: AppColors.border.withValues(alpha: 0.8),
           ),
         ),
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(3, 7, 3, 5),
-          child: Row(
-            children: List.generate(items.length, (index) {
-              final active = selectedIndex == index;
-              final item = items[index];
+          padding: const EdgeInsets.fromLTRB(3, 6, 3, 5),
+          child: SizedBox(
+            height: 52,
+            child: Row(
+              children: List.generate(items.length, (index) {
+                final active = selectedIndex == index;
+                final item = items[index];
+                final color = active ? AppColors.navy : AppColors.text;
 
-              return Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(9),
-                  onTap: () => onTap(index),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 1),
+                return Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(9),
+                    onTap: () => onTap(index),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           item['icon'] as IconData,
-                          size: 19,
-                          color: active
-                              ? AppColors.navy
-                              : const Color(0xFF514B3E),
+                          size: 20,
+                          color: color,
                         ),
                         const SizedBox(height: 3),
                         Text(
@@ -62,10 +61,8 @@ class UserBottomNavigation extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: active
-                                ? AppColors.navy
-                                : const Color(0xFF514B3E),
-                            fontSize: 8,
+                            color: color,
+                            fontSize: 9.5,
                             fontWeight: active
                                 ? FontWeight.w800
                                 : FontWeight.w500,
@@ -74,9 +71,9 @@ class UserBottomNavigation extends StatelessWidget {
                       ],
                     ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ),
       ),

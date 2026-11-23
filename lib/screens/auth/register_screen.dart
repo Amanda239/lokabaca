@@ -105,6 +105,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
 
+      // Pastikan baris profil ada agar login dapat membaca role 'user'.
+      // (Trigger database melakukan hal yang sama bila tersedia.)
+      try {
+        await Supabase.instance.client.from('profiles').upsert({
+          'id': response.user!.id,
+          'full_name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'role': 'user',
+          'status': 'Aktif',
+        }, onConflict: 'id');
+      } catch (_) {
+        // Profil kemungkinan sudah dibuat trigger; registrasi tetap berhasil.
+      }
+
       if (response.session == null) {
         _showMessage(
           'Akun berhasil dibuat. Silakan cek email untuk verifikasi.',
@@ -113,6 +128,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _showMessage('Registrasi berhasil! Silakan masuk.');
       }
 
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -380,7 +396,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       backgroundColor: AppColors.navy,
                       foregroundColor: AppColors.white,
                       disabledBackgroundColor:
-                          AppColors.navy.withOpacity(0.6),
+                          AppColors.navy.withValues(alpha: 0.6),
                       elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),

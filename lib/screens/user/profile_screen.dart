@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
+import '../../widgets/user_avatar.dart';
 import '../auth/login_screen.dart';
 import 'user_bottom_navigation.dart';
 import 'edit_profile_screen.dart';
 import 'help_screen.dart';
 import 'pengaturan_aplikasi_screen.dart';
+import 'notifikasi_screen.dart';
+import 'wishlist_screen.dart';
 
 import 'dashboard_screen.dart';
 import 'searchpage_screen.dart';
@@ -22,15 +26,13 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color textColor = Color(0xFF304258);
-  static const Color mutedText = Color(0xFF9299A5);
-  static const Color yellow = Color(0xFFF4C95D);
-  static const Color red = Color(0xFFFF4438);
-
-  final SupabaseClient supabase = Supabase.instance.client;
+class _ProfileScreenState extends State<ProfileScreen>
+    with WidgetsBindingObserver {
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color textColor = AppColors.text;
+  static const Color mutedText = AppColors.grey;
+  static const Color red = Color(0xFFD64545);
 
   Map<String, dynamic>? profile;
 
@@ -41,7 +43,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     loadProfile();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Profil selalu disegarkan dari Supabase saat aplikasi aktif kembali.
+    if (state == AppLifecycleState.resumed && mounted) {
+      loadProfile();
+    }
   }
 
   // LOAD PROFILE
@@ -55,22 +72,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
-      final user = supabase.auth.currentUser;
+      final userId = AuthService.currentUserId;
 
-      if (user == null) {
+      if (userId == null) {
         redirectToLogin();
         return;
       }
 
-      final response = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url, role, phone')
-          .eq('id', user.id)
-          .maybeSingle();
+      // Data asli Supabase, diambil ulang setiap masuk ke halaman ini.
+      final data = await AuthService.currentProfile();
 
       if (!mounted) return;
 
-      if (response == null) {
+      if (data == null) {
         setState(() {
           isLoading = false;
           errorMessage = 'Data profil belum ditemukan.';
@@ -79,7 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       setState(() {
-        profile = response;
+        profile = data;
         isLoading = false;
       });
     } catch (e) {
@@ -183,7 +197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
 
     try {
-      await supabase.auth.signOut();
+      await AuthService.signOut();
 
       if (!mounted) return;
 
@@ -287,13 +301,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // PROFILE CONTENT
 
   Widget _buildContent() {
-    final currentUser = supabase.auth.currentUser;
-
     final name = profile?['full_name']?.toString().trim().isNotEmpty == true
         ? profile!['full_name'].toString().trim()
-        : currentUser?.userMetadata?['full_name']?.toString() ?? 'Pengguna';
+        : 'Pengguna';
 
-    final email = currentUser?.email ?? '-';
+    final email = profile?['email']?.toString() ?? AuthService.currentEmail ?? '-';
     final avatarUrl = profile?['avatar_url']?.toString();
 
     return RefreshIndicator(
@@ -363,7 +375,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
 
-                  const SizedBox(height: 47),
+                  const SizedBox(height: 20),
+
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: AppColors.border,
+                  ),
+
+                  const SizedBox(height: 20),
 
                   // AKUN & KEAMANAN
                   // Menu ini membuka EditProfileScreen.
@@ -374,19 +394,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: _openAccountSecurity,
                   ),
 
-                  const SizedBox(height: 42),
+                  _buildSectionDivider(),
+
+                  // NOTIFIKASI
+                  _buildMenuItem(
+                    icon: Icons.notifications_none_rounded,
+                    title: 'Notifikasi',
+                    subtitle:
+                        'Pembaruan peminjaman, denda, dan pengingat jatuh tempo',
+                    onTap: _openNotifications,
+                  ),
+
+                  _buildSectionDivider(),
 
                   // WISHLIST
                   _buildMenuItem(
                     icon: Icons.shopping_bag_outlined,
                     title: 'Wishlist Saya',
-                    subtitle: 'Cek Wishlist yang sedang kamu tunggu',
-                    onTap: () {
-                      showMessage('Halaman Wishlist belum tersedia.');
-                    },
+                    subtitle: 'Cek buku yang ingin kamu baca',
+                    onTap: _openWishlist,
                   ),
 
-                  const SizedBox(height: 42),
+                  _buildSectionDivider(),
 
                   // DENDA
                   // Menu ini membuka DendaScreen.
@@ -397,7 +426,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: _openDenda,
                   ),
 
-                  const SizedBox(height: 42),
+                  _buildSectionDivider(),
 
                   // PENGATURAN
                   _buildMenuItem(
@@ -408,7 +437,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: _openSettings,
                   ),
 
-                  const SizedBox(height: 42),
+                  _buildSectionDivider(),
 
                   // DUKUNGAN
                   _buildMenuItem(
@@ -419,40 +448,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: _openHelp,
                   ),
 
-                  const SizedBox(height: 65),
+                  _buildSectionDivider(),
+
+                  const SizedBox(height: 30),
 
                   // KELUAR
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton.icon(
-                      onPressed: isLoggingOut ? null : logout,
-                      icon: isLoggingOut
-                          ? const SizedBox(
-                              width: 17,
-                              height: 17,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                  Center(
+                    child: SizedBox(
+                      width: 190,
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        onPressed: isLoggingOut ? null : logout,
+                        icon: isLoggingOut
+                            ? const SizedBox(
+                                width: 15,
+                                height: 15,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: red,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.logout_rounded,
                                 color: red,
+                                size: 16,
                               ),
-                            )
-                          : const Icon(
-                              Icons.logout_rounded,
-                              color: red,
-                              size: 20,
-                            ),
-                      label: Text(
-                        isLoggingOut ? 'Keluar...' : 'Keluar',
-                        style: const TextStyle(
-                          color: red,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                        label: Text(
+                          isLoggingOut ? 'Keluar...' : 'Keluar',
+                          style: const TextStyle(
+                            color: red,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: red, width: 1.3),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: red, width: 1.2),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -471,26 +504,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // AVATAR
 
   Widget _buildAvatar(String? avatarUrl) {
-    return Container(
-      width: 78,
-      height: 78,
-      decoration: const BoxDecoration(color: yellow, shape: BoxShape.circle),
-      clipBehavior: Clip.antiAlias,
-      child: avatarUrl != null && avatarUrl.isNotEmpty
-          ? Image.network(
-              avatarUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return _avatarPlaceholder();
-              },
-            )
-          : _avatarPlaceholder(),
+    return UserAvatar(
+      imageUrl: avatarUrl,
+      size: 78,
+      iconSize: 43,
     );
   }
 
-  Widget _avatarPlaceholder() {
-    return const Center(
-      child: Icon(Icons.person_rounded, color: Colors.white, size: 43),
+  // PEMISAH MENU
+
+  Widget _buildSectionDivider() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 13),
+      child: Divider(height: 1, thickness: 1, color: AppColors.border),
     );
   }
 
@@ -552,12 +578,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _openAccountSecurity() async {
     if (profile == null) return;
 
-    final result = await Navigator.push<bool>(
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => EditProfileScreen(profile: profile!)),
     );
 
-    if (result == true && mounted) {
+    // Selalu segarkan profil setelah kembali, bukan hanya saat result true.
+    if (mounted) {
       await loadProfile();
     }
   }
@@ -565,16 +592,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _openSettings() async {
     if (profile == null) return;
 
-    final result = await Navigator.push<bool>(
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => PengaturanAplikasiScreen(profile: profile!),
       ),
     );
 
-    if (result == true && mounted) {
+    if (mounted) {
       await loadProfile();
     }
+  }
+
+  // WISHLIST
+
+  void _openWishlist() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const WishlistScreen()),
+    );
+  }
+
+  // NOTIFIKASI
+
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotifikasiUserScreen()),
+    );
   }
 
   // DENDA

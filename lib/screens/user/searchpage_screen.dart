@@ -1,16 +1,16 @@
-
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
-import 'user_bottom_navigation.dart';
-import 'dashboard_screen.dart';
+import '../../core/services/book_repository.dart';
+import '../../widgets/book_cover.dart';
+import 'all_books_screen.dart';
+import 'category_books_screen.dart';
 import 'collection_screen.dart';
+import 'dashboard_screen.dart';
+import 'detail_buku_screen.dart';
 import 'peminjaman_screen.dart';
 import 'profile_screen.dart';
-import 'category_books_screen.dart';
-import 'detail_buku_screen.dart';
-import 'all_books_screen.dart';
+import 'user_bottom_navigation.dart';
 
 class SearchPageScreen extends StatefulWidget {
   const SearchPageScreen({super.key});
@@ -20,55 +20,55 @@ class SearchPageScreen extends StatefulWidget {
 }
 
 class _SearchPageScreenState extends State<SearchPageScreen> {
-  final supabase = Supabase.instance.client;
-
-  final TextEditingController searchController =
-      TextEditingController();
+  final TextEditingController searchController = TextEditingController();
 
   final PageController recommendationController =
       PageController(viewportFraction: 0.94);
 
   List<Map<String, dynamic>> books = [];
+  List<String> categories = [];
 
   String searchQuery = '';
   String selectedSort = 'Rekomendasi';
 
   int selectedNav = 1;
   int currentRecommendation = 0;
+  int _loadToken = 0;
 
   bool isLoadingBooks = true;
   String? errorMessage;
 
-  final List<Map<String, dynamic>> categoryItems = [
-    {
-      'name': 'Fiksi',
-      'icon': Icons.menu_book_rounded,
-    },
-    {
-      'name': 'Non Fiksi',
-      'icon': Icons.auto_stories_rounded,
-    },
-    {
-      'name': 'Komik',
-      'icon': Icons.draw_rounded,
-    },
-    {
-      'name': 'Teknologi',
-      'icon': Icons.memory_rounded,
-    },
-    {
-      'name': 'Pendidikan',
-      'icon': Icons.school_rounded,
-    },
-    {
-      'name': 'Agama',
-      'icon': Icons.bookmark_rounded,
-    },
+  static const sortOptions = [
+    'Rekomendasi',
+    'Judul A-Z',
+    'Penulis A-Z',
+    'Rating Tertinggi',
   ];
+
+  String get repositorySort => switch (selectedSort) {
+        'Judul A-Z' => 'Judul A-Z',
+        'Penulis A-Z' => 'Judul A-Z',
+        'Rating Tertinggi' => 'Rating tertinggi',
+        _ => BookRepository.sortOptions.first,
+      };
+
+  IconData _categoryIcon(String name) {
+    final key = name.toLowerCase();
+    if (key.contains('fiksi') && !key.contains('non')) {
+      return Icons.menu_book_rounded;
+    }
+    if (key.contains('non')) return Icons.auto_stories_rounded;
+    if (key.contains('komik')) return Icons.draw_rounded;
+    if (key.contains('teknolog')) return Icons.memory_rounded;
+    if (key.contains('pendidikan')) return Icons.school_rounded;
+    if (key.contains('agama')) return Icons.bookmark_rounded;
+    return Icons.book_outlined;
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadCategories();
     loadBooks();
   }
 
@@ -79,23 +79,33 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
     super.dispose();
   }
 
-  // AMBIL DATA BUKU DARI SUPABASE
+  Future<void> _loadCategories() async {
+    final result = await BookRepository.categories();
+    if (mounted) setState(() => categories = result);
+  }
+
+  // AMBIL DATA BUKU DARI REPOSITORY (MAKS. 10 REKOMENDASI)
   Future<void> loadBooks() async {
+    final token = ++_loadToken;
+
+    if (!mounted) return;
+    setState(() {
+      isLoadingBooks = true;
+      errorMessage = null;
+    });
+
     try {
-      setState(() {
-        isLoadingBooks = true;
-        errorMessage = null;
-      });
+      final query = searchQuery.trim().isEmpty ? null : searchQuery.trim();
+      final result = await BookRepository.fetchPage(
+        page: 0,
+        search: query,
+        sort: repositorySort,
+      );
 
-      final response = await supabase
-          .from('books')
-          .select()
-          .order('created_at', ascending: false);
-
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
 
       setState(() {
-        books = List<Map<String, dynamic>>.from(response);
+        books = result;
         isLoadingBooks = false;
         currentRecommendation = 0;
       });
@@ -103,9 +113,8 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
       if (recommendationController.hasClients) {
         recommendationController.jumpToPage(0);
       }
-    } catch (e) {
-      if (!mounted) return;
-
+    } catch (_) {
+      if (!mounted || token != _loadToken) return;
       setState(() {
         isLoadingBooks = false;
         errorMessage = 'Gagal memuat data buku.';
@@ -113,10 +122,18 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
     }
   }
 
-  // MENYESUAIKAN DATA BUKU UNTUK HALAMAN DETAIL
-  Map<String, dynamic> _prepareBookForDetail(
-    Map<String, dynamic> book,
-  ) {
+  void _onSearchChanged(String value) {
+    setState(() {
+      searchQuery = value;
+      currentRecommendation = 0;
+    });
+    loadBooks();
+    if (recommendationController.hasClients) {
+      recommendationController.jumpToPage(0);
+    }
+  }
+
+  Map<String, dynamic> _prepareBookForDetail(Map<String, dynamic> book) {
     return {
       ...book,
       'cover': book['cover_url'] ?? book['cover'] ?? '',
@@ -128,7 +145,6 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
     };
   }
 
-  // MEMBUKA HALAMAN DETAIL BUKU
   void _openBookDetail(Map<String, dynamic> book) {
     Navigator.push(
       context,
@@ -138,61 +154,6 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
         ),
       ),
     );
-  }
-
-  // FILTER DAN SORTING BUKU
-  List<Map<String, dynamic>> get filteredBooks {
-    final query = searchQuery.trim().toLowerCase();
-
-    final result = books.where((book) {
-      final title =
-          (book['title'] ?? '').toString().toLowerCase();
-
-      final author =
-          (book['author'] ?? '').toString().toLowerCase();
-
-      final category =
-          (book['category'] ?? '').toString().toLowerCase();
-
-      final matchesSearch = query.isEmpty ||
-          title.contains(query) ||
-          author.contains(query) ||
-          category.contains(query);
-
-      return matchesSearch;
-    }).toList();
-
-    if (selectedSort == 'Judul A-Z') {
-      result.sort(
-        (a, b) => (a['title'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo(
-              (b['title'] ?? '').toString().toLowerCase(),
-            ),
-      );
-    } else if (selectedSort == 'Penulis A-Z') {
-      result.sort(
-        (a, b) => (a['author'] ?? '')
-            .toString()
-            .toLowerCase()
-            .compareTo(
-              (b['author'] ?? '').toString().toLowerCase(),
-            ),
-      );
-    } else if (selectedSort == 'Rating Tertinggi') {
-      result.sort((a, b) {
-        final ratingA =
-            double.tryParse('${a['rating'] ?? 0}') ?? 0;
-
-        final ratingB =
-            double.tryParse('${b['rating'] ?? 0}') ?? 0;
-
-        return ratingB.compareTo(ratingA);
-      });
-    }
-
-    return result;
   }
 
   @override
@@ -215,7 +176,9 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                     _buildSearchField(),
                     const SizedBox(height: 25),
                     _buildSectionHeader(
-                      'Rekomendasi untukmu',
+                      searchQuery.trim().isEmpty
+                          ? 'Rekomendasi untukmu'
+                          : 'Hasil pencarian',
                       'Temukan bacaan yang menarik untukmu.',
                       trailing: 'Lihat Semua',
                       onTrailingTap: _openAllBooks,
@@ -255,7 +218,7 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: AppColors.navy.withOpacity(0.04),
+            color: AppColors.navy.withValues(alpha: 0.04),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -263,25 +226,13 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
       ),
       child: TextField(
         controller: searchController,
-        onChanged: (value) {
-          setState(() {
-            searchQuery = value;
-            currentRecommendation = 0;
-          });
-
-          if (recommendationController.hasClients) {
-            recommendationController.jumpToPage(0);
-          }
-        },
+        onChanged: _onSearchChanged,
         textInputAction: TextInputAction.search,
-        style: const TextStyle(
-          color: AppColors.text,
-          fontSize: 12,
-        ),
+        style: const TextStyle(color: AppColors.text, fontSize: 12),
         decoration: InputDecoration(
           hintText: 'Cari buku, penulis, atau kategori',
           hintStyle: TextStyle(
-            color: AppColors.grey.withOpacity(0.9),
+            color: AppColors.grey.withValues(alpha: 0.9),
             fontSize: 11,
           ),
           prefixIcon: const Icon(
@@ -293,25 +244,13 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
               ? IconButton(
                   onPressed: () {
                     searchController.clear();
-
-                    setState(() {
-                      searchQuery = '';
-                      currentRecommendation = 0;
-                    });
-
-                    if (recommendationController.hasClients) {
-                      recommendationController.jumpToPage(0);
-                    }
+                    _onSearchChanged('');
                   },
-                  icon: const Icon(
-                    Icons.close_rounded,
-                    size: 18,
-                  ),
+                  icon: const Icon(Icons.close_rounded, size: 18),
                 )
               : null,
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
     );
@@ -343,10 +282,7 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    color: AppColors.grey,
-                    fontSize: 10,
-                  ),
+                  style: const TextStyle(color: AppColors.grey, fontSize: 10),
                 ),
               ],
             ],
@@ -357,10 +293,7 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
             onTap: onTrailingTap,
             borderRadius: BorderRadius.circular(8),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: 5,
-                horizontal: 2,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
               child: Row(
                 children: [
                   Text(
@@ -389,29 +322,19 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
   Widget _buildRecommendationControls() {
     return Row(
       children: [
-        const Icon(
-          Icons.swipe_rounded,
-          color: AppColors.grey,
-          size: 14,
-        ),
+        const Icon(Icons.swipe_rounded, color: AppColors.grey, size: 14),
         const SizedBox(width: 5),
         const Expanded(
           child: Text(
             'Geser untuk melihat buku lainnya',
-            style: TextStyle(
-              color: AppColors.grey,
-              fontSize: 9,
-            ),
+            style: TextStyle(color: AppColors.grey, fontSize: 9),
           ),
         ),
         InkWell(
           onTap: _showSortOptions,
           borderRadius: BorderRadius.circular(8),
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 5,
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
             child: Row(
               children: [
                 const Icon(
@@ -440,107 +363,76 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
   Widget _buildRecommendedBooks() {
     if (isLoadingBooks) {
       return const SizedBox(
-        height: 215,
+        height: 190,
         child: Center(
-          child: CircularProgressIndicator(
-            color: AppColors.navy,
-          ),
+          child: CircularProgressIndicator(color: AppColors.navy),
         ),
       );
     }
 
-    if (errorMessage != null) {
-      return _buildLoadError();
-    }
-
-    final result = filteredBooks;
-
-    if (result.isEmpty) {
-      return _emptyState();
-    }
+    if (errorMessage != null) return _buildLoadError();
+    if (books.isEmpty) return _emptyState();
 
     return Column(
       children: [
         SizedBox(
-          height: 205,
+          height: 190,
           child: PageView.builder(
             controller: recommendationController,
-            itemCount: result.length,
+            itemCount: books.length,
             onPageChanged: (index) {
-              setState(() {
-                currentRecommendation = index;
-              });
+              setState(() => currentRecommendation = index);
             },
             itemBuilder: (context, index) {
-              final book = result[index];
-
               return Padding(
                 padding: const EdgeInsets.only(right: 10),
-                child: _buildRecommendationCard(book, index),
+                child: _buildRecommendationCard(books[index]),
               );
             },
           ),
         ),
-        if (result.length > 1) ...[
-          const SizedBox(height: 13),
+        if (books.length > 1) ...[
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              result.length,
-              (index) {
-                final isSelected =
-                    currentRecommendation == index;
-
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: isSelected ? 19 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppColors.navy
-                        : AppColors.border,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                );
-              },
-            ),
+            children: List.generate(books.length, (index) {
+              final isSelected = currentRecommendation == index;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: isSelected ? 19 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.navy : AppColors.border,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              );
+            }),
           ),
         ],
       ],
     );
   }
 
-  // RECOMMENDATION CARD
-  Widget _buildRecommendationCard(
-    Map<String, dynamic> book,
-    int index,
-  ) {
-    final stock =
-        int.tryParse('${book['stock'] ?? 0}') ?? 0;
-
-    final rating =
-        double.tryParse('${book['rating'] ?? 0}') ?? 0;
-
+  // RECOMMENDATION CARD (KOMPAK)
+  Widget _buildRecommendationCard(Map<String, dynamic> book) {
+    final stock = int.tryParse('${book['stock'] ?? 0}') ?? 0;
+    final rating = double.tryParse('${book['rating'] ?? 0}') ?? 0;
     final available = stock > 0;
-
-    final description =
-        (book['description'] ?? '').toString().trim();
+    final description = (book['description'] ?? '').toString().trim();
 
     return GestureDetector(
       onTap: () => _openBookDetail(book),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.cream,
-          borderRadius: BorderRadius.circular(17),
-          border: Border.all(
-            color: AppColors.border.withOpacity(0.7),
-          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
           boxShadow: [
             BoxShadow(
-              color: AppColors.navy.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 5),
+              color: AppColors.navy.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -551,16 +443,16 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
               right: -30,
               top: -35,
               child: Container(
-                width: 150,
-                height: 150,
+                width: 140,
+                height: 140,
                 decoration: BoxDecoration(
-                  color: AppColors.navy.withOpacity(0.04),
+                  color: AppColors.navy.withValues(alpha: 0.04),
                   shape: BoxShape.circle,
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(13),
               child: Row(
                 children: [
                   Expanded(
@@ -570,11 +462,11 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 9,
-                            vertical: 5,
+                            horizontal: 8,
+                            vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.navy.withOpacity(0.08),
+                            color: AppColors.navy.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: const Text(
@@ -587,90 +479,79 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 11),
+                        const SizedBox(height: 8),
                         Text(
                           book['title']?.toString() ?? 'Tanpa Judul',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppColors.navy,
-                            fontSize: 15,
+                            fontSize: 13,
                             height: 1.25,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 4),
                         Text(
                           book['author']?.toString() ?? '-',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppColors.grey,
-                            fontSize: 10,
+                            fontSize: 9,
                           ),
                         ),
-                        const SizedBox(height: 9),
-                        if (description.isNotEmpty)
-                          Text(
-                            description,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.text,
-                              fontSize: 9,
-                              height: 1.4,
-                            ),
-                          )
-                        else
-                          const Text(
-                            'Temukan cerita dan pengetahuan baru dari buku ini.',
-                            maxLines: 2,
-                            style: TextStyle(
-                              color: AppColors.text,
-                              fontSize: 9,
-                              height: 1.4,
-                            ),
+                        const SizedBox(height: 7),
+                        Text(
+                          description.isNotEmpty
+                              ? description
+                              : 'Temukan cerita dan pengetahuan baru dari buku ini.',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.text,
+                            fontSize: 9,
+                            height: 1.4,
                           ),
+                        ),
                         const Spacer(),
                         Row(
                           children: [
                             const Icon(
                               Icons.star_rounded,
-                              color: Color(0xFFE5AA35),
-                              size: 15,
+                              color: AppColors.yellow,
+                              size: 14,
                             ),
                             const SizedBox(width: 3),
                             Text(
                               rating.toStringAsFixed(1),
                               style: const TextStyle(
                                 color: AppColors.navy,
-                                fontSize: 10,
+                                fontSize: 9,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(width: 9),
+                            const SizedBox(width: 8),
                             Container(
                               width: 5,
                               height: 5,
                               decoration: BoxDecoration(
                                 color: available
-                                    ? const Color(0xFF4D9469)
-                                    : const Color(0xFFD49B38),
+                                    ? AppColors.navy
+                                    : AppColors.grey,
                                 shape: BoxShape.circle,
                               ),
                             ),
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
-                                available
-                                    ? 'Tersedia'
-                                    : 'Tidak tersedia',
+                                available ? 'Tersedia' : 'Tidak tersedia',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: available
-                                      ? const Color(0xFF4D9469)
-                                      : const Color(0xFFD49B38),
+                                      ? AppColors.navy
+                                      : AppColors.grey,
                                   fontSize: 9,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -681,41 +562,14 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 105,
-                    height: 155,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.navy.withOpacity(0.17),
-                            blurRadius: 10,
-                            offset: const Offset(3, 5),
-                          ),
-                        ],
-                      ),
-                      child: _buildBookCover(book),
-                    ),
+                  const SizedBox(width: 10),
+                  BookCover(
+                    imageUrl: book['cover_url'] ?? book['cover'],
+                    width: 100,
+                    height: 150,
+                    radius: 10,
                   ),
                 ],
-              ),
-            ),
-            Positioned(
-              right: 12,
-              top: 12,
-              child: Container(
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  color: AppColors.white.withOpacity(0.8),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.arrow_outward_rounded,
-                  size: 13,
-                  color: AppColors.navy,
-                ),
               ),
             ),
           ],
@@ -724,26 +578,34 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
     );
   }
 
-  // CATEGORY GRID
+  // CATEGORY GRID (KATEGORI ASLI DARI DATABASE)
   Widget _buildCategoryGrid() {
+    if (categories.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(18),
+        child: Text(
+          'Kategori belum tersedia.',
+          style: TextStyle(color: AppColors.grey, fontSize: 11),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount =
-            constraints.maxWidth < 260 ? 2 : 3;
+        final crossAxisCount = constraints.maxWidth < 260 ? 2 : 3;
 
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: categoryItems.length,
-          gridDelegate:
-              SliverGridDelegateWithFixedCrossAxisCount(
+          itemCount: categories.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
             childAspectRatio: 1.18,
           ),
           itemBuilder: (context, index) {
-            final item = categoryItems[index];
+            final category = categories[index];
 
             return Material(
               color: AppColors.cream,
@@ -751,14 +613,10 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
               child: InkWell(
                 borderRadius: BorderRadius.circular(13),
                 onTap: () {
-                  final category = item['name'].toString();
-
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CategoryBooksScreen(
-                        category: category,
-                      ),
+                      builder: (_) => CategoryBooksScreen(category: category),
                     ),
                   );
                 },
@@ -766,14 +624,16 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      item['icon'] as IconData,
+                      _categoryIcon(category),
                       color: AppColors.navy,
                       size: 23,
                     ),
                     const SizedBox(height: 7),
                     Text(
-                      item['name'].toString(),
+                      category,
                       textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.navy,
                         fontSize: 10,
@@ -790,77 +650,18 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
     );
   }
 
-  // BOOK COVER
-  Widget _buildBookCover(
-    Map<String, dynamic> book, {
-    bool compact = false,
-  }) {
-    final coverUrl = book['cover_url']?.toString() ?? '';
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: SizedBox.expand(
-        child: coverUrl.isNotEmpty
-            ? Image.network(
-                coverUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    _buildCoverPlaceholder(book, compact),
-              )
-            : _buildCoverPlaceholder(book, compact),
-      ),
-    );
-  }
-
-  Widget _buildCoverPlaceholder(
-    Map<String, dynamic> book, [
-    bool compact = false,
-  ]) {
-    return Container(
-      color: AppColors.cream,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(10),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.menu_book_rounded,
-            color: AppColors.navy,
-            size: compact ? 32 : 40,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            (book['title'] ?? 'Buku').toString().toUpperCase(),
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.navy,
-              fontSize: compact ? 10 : 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // EMPTY STATE
   Widget _emptyState() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.cream.withOpacity(0.5),
+        color: AppColors.cream.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
       ),
       child: const Column(
         children: [
-          Icon(
-            Icons.menu_book_rounded,
-            color: AppColors.grey,
-            size: 38,
-          ),
+          Icon(Icons.menu_book_rounded, color: AppColors.grey, size: 38),
           SizedBox(height: 10),
           Text(
             'Buku tidak ditemukan',
@@ -874,10 +675,7 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
           Text(
             'Coba kata kunci lainnya.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.grey,
-              fontSize: 10,
-            ),
+            style: TextStyle(color: AppColors.grey, fontSize: 10),
           ),
         ],
       ),
@@ -891,11 +689,7 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          const Icon(
-            Icons.wifi_off_rounded,
-            color: AppColors.grey,
-            size: 32,
-          ),
+          const Icon(Icons.wifi_off_rounded, color: AppColors.grey, size: 32),
           const SizedBox(height: 8),
           const Text(
             'Gagal memuat buku',
@@ -917,23 +711,17 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
 
   // OPEN ALL BOOKS
   void _openAllBooks() {
+    final query = searchQuery.trim();
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => const AllBooksScreen(),
+        builder: (_) => AllBooksScreen(search: query.isEmpty ? null : query),
       ),
     );
   }
 
   // SORT OPTIONS
   void _showSortOptions() {
-    const options = [
-      'Rekomendasi',
-      'Judul A-Z',
-      'Penulis A-Z',
-      'Rating Tertinggi',
-    ];
-
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.white,
@@ -954,29 +742,24 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              ...options.map(
+              ...sortOptions.map(
                 (option) => RadioListTile<String>(
                   contentPadding: EdgeInsets.zero,
                   value: option,
                   groupValue: selectedSort,
                   activeColor: AppColors.navy,
-                  title: Text(
-                    option,
-                    style: const TextStyle(fontSize: 12),
-                  ),
+                  title: Text(option, style: const TextStyle(fontSize: 12)),
                   onChanged: (value) {
                     if (value == null) return;
-
                     setState(() {
                       selectedSort = value;
                       currentRecommendation = 0;
                     });
-
                     if (recommendationController.hasClients) {
                       recommendationController.jumpToPage(0);
                     }
-
                     Navigator.pop(sheetContext);
+                    loadBooks();
                   },
                 ),
               ),
@@ -997,18 +780,14 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
       case 0:
         destination = const DashboardScreen();
         break;
-
       case 1:
         return;
-
       case 2:
         destination = const PeminjamanScreen();
         break;
-
       case 3:
         destination = const CollectionScreen();
         break;
-
       case 4:
         destination = const ProfileScreen();
         break;
@@ -1018,9 +797,7 @@ class _SearchPageScreenState extends State<SearchPageScreen> {
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => destination!,
-      ),
+      MaterialPageRoute(builder: (_) => destination!),
     );
   }
 }

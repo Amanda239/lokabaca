@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+
 class EditProfileAdminScreen extends StatefulWidget {
   final Map<String, dynamic> profile;
 
@@ -21,12 +23,12 @@ class EditProfileAdminScreen extends StatefulWidget {
 class _EditProfileAdminScreenState
     extends State<EditProfileAdminScreen> {
   // COLORS
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color textColor = Color(0xFF304258);
-  static const Color mutedText = Color(0xFF8993A1);
-  static const Color borderColor = Color(0xFFD8D4CB);
-  static const Color yellow = Color(0xFFF7C957);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color textColor = AppColors.text;
+  static const Color mutedText = AppColors.grey;
+  static const Color borderColor = AppColors.border;
+  static const Color yellow = AppColors.yellow;
 
   final SupabaseClient supabase = Supabase.instance.client;
   final ImagePicker picker = ImagePicker();

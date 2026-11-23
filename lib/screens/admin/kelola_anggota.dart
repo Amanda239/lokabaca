@@ -2,8 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
 import 'admin_bottom_navigation.dart';
 import 'dashboard_admin.dart';
+import 'denda_admin_screen.dart';
 import 'kelola_buku.dart';
 import 'peminjaman_admin.dart';
 import 'profile_admin.dart';
@@ -16,10 +18,10 @@ class KelolaAnggotaPage extends StatefulWidget {
 }
 
 class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color mutedText = Color(0xFF9299A3);
-  static const Color borderColor = Color(0xFF50647D);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color mutedText = AppColors.grey;
+  static const Color borderColor = AppColors.border;
 
   final SupabaseClient supabase = Supabase.instance.client;
   final TextEditingController searchController = TextEditingController();
@@ -116,7 +118,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
   // BOTTOM NAVIGATION
   Future<void> handleBottomNavigation(int index) async {
     if (index == selectedIndex) return;
-    if (index < 0 || index > 4) return;
+    if (index < 0 || index > 5) return;
 
     Widget? page;
 
@@ -133,6 +135,9 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
         page = const PeminjamanAdminScreen();
         break;
       case 4:
+        page = const DendaAdminScreen();
+        break;
+      case 5:
         page = const ProfileAdminScreen();
         break;
     }
@@ -474,7 +479,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
         status,
         style: TextStyle(
           color: foregroundColor,
-          fontSize: 9,
+          fontSize: 10,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -631,7 +636,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
           decoration: InputDecoration(
             hintText: 'Cari Nama, NIS atau Email...',
             hintStyle: const TextStyle(
-              color: Color(0xFF718096),
+              color: mutedText,
               fontSize: 10,
             ),
             prefixIcon: const Icon(
@@ -684,7 +689,7 @@ class _KelolaAnggotaPageState extends State<KelolaAnggotaPage> {
             isSearching
                 ? Icons.search_off_rounded
                 : Icons.people_outline_rounded,
-            color: const Color(0xFFB8C0CA),
+            color: borderColor,
             size: 48,
           ),
           const SizedBox(height: 12),

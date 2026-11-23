@@ -2,13 +2,18 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/notification_service.dart';
+import '../../widgets/book_cover.dart';
+import 'admin_bottom_navigation.dart';
+import 'denda_admin_screen.dart';
 import 'kelola_buku.dart';
 import 'kelola_anggota.dart';
-import 'peminjaman_admin.dart';
-import 'profile_admin.dart';
 import 'laporan_admin.dart';
 import 'notifikasi_admin.dart';
-import 'admin_bottom_navigation.dart';
+import 'peminjaman_admin.dart';
+import 'profile_admin.dart';
 
 class DashboardAdmin extends StatefulWidget {
   const DashboardAdmin({super.key});
@@ -18,11 +23,11 @@ class DashboardAdmin extends StatefulWidget {
 }
 
 class _DashboardAdminState extends State<DashboardAdmin> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color textColor = Color(0xFF304258);
-  static const Color mutedText = Color(0xFF8792A1);
-  static const Color borderColor = Color(0xFFE8E4DB);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color textColor = AppColors.text;
+  static const Color mutedText = AppColors.grey;
+  static const Color borderColor = AppColors.border;
 
   final SupabaseClient supabase = Supabase.instance.client;
 
@@ -49,6 +54,9 @@ class _DashboardAdminState extends State<DashboardAdmin> {
     super.initState();
 
     loadDashboardData();
+    NotificationService.runChecks().whenComplete(() {
+      if (mounted) loadDashboardData();
+    });
     loadUnreadNotificationCount();
     listenToNotifications();
   }
@@ -207,10 +215,14 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
   Future<void> loadUnreadNotificationCount() async {
     try {
-      final count = await supabase
+      final adminId = AuthService.currentUserId;
+      final query = supabase
           .from('notifications')
           .count(CountOption.exact)
           .eq('is_read', false);
+      final count = adminId == null
+          ? await query
+          : await query.eq('user_id', adminId);
 
       if (!mounted) return;
 
@@ -395,6 +407,13 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       case 4:
         navigateToPage(
           4,
+          const DendaAdminScreen(),
+        );
+        break;
+
+      case 5:
+        navigateToPage(
+          5,
           const ProfileAdminScreen(),
         );
         break;
@@ -406,7 +425,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
   void _openProfile() {
     navigateToPage(
-      4,
+      5,
       const ProfileAdminScreen(),
     );
   }
@@ -524,7 +543,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                 Text(
                   'Selamat datang di panel admin\nLokaBaca',
                   style: TextStyle(
-                    color: Color(0xFF718096),
+                    color: mutedText,
                     fontSize: 11,
                     height: 1.4,
                   ),
@@ -582,7 +601,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE45757),
+                    color: const Color(0xFFD94343),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: Colors.white,
@@ -596,7 +615,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                           : '$unreadNotificationCount',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -667,7 +686,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               errorMessage ?? 'Terjadi kesalahan',
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: Color(0xFFD7DFE8),
+                color: mutedText,
                 fontSize: 11,
                 height: 1.5,
               ),
@@ -698,6 +717,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       color: navy,
       backgroundColor: cream,
       onRefresh: () async {
+        await NotificationService.runChecks();
         await loadDashboardData();
         await loadUnreadNotificationCount();
       },
@@ -970,7 +990,11 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       ),
       child: Row(
         children: [
-          _buildBookCover(coverUrl),
+          BookCover(
+            imageUrl: coverUrl,
+            width: 52,
+            height: 76,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1014,7 +1038,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                       : _formatDate(borrowedAt),
                   style: const TextStyle(
                     color: textColor,
-                    fontSize: 9,
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1035,43 +1059,12 @@ class _DashboardAdminState extends State<DashboardAdmin> {
               statusText,
               style: TextStyle(
                 color: statusForeground,
-                fontSize: 8,
+                fontSize: 10,
                 fontWeight: FontWeight.w800,
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildBookCover(String? coverUrl) {
-    return Container(
-      width: 52,
-      height: 76,
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: coverUrl != null && coverUrl.isNotEmpty
-          ? Image.network(
-              coverUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) {
-                return _buildCoverPlaceholder();
-              },
-            )
-          : _buildCoverPlaceholder(),
-    );
-  }
-
-  Widget _buildCoverPlaceholder() {
-    return const Center(
-      child: Icon(
-        Icons.auto_stories_outlined,
-        color: navy,
-        size: 27,
       ),
     );
   }

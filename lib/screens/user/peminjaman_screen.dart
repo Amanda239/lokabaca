@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
+import '../../widgets/book_cover.dart';
 import 'user_bottom_navigation.dart';
 import 'dashboard_screen.dart';
 import 'searchpage_screen.dart';
 import 'collection_screen.dart';
 import 'profile_screen.dart';
 import 'denda_screen.dart';
+import 'form_peminjaman.dart';
 
 class PeminjamanScreen extends StatefulWidget {
   final Map<String, dynamic>? selectedBook;
@@ -24,10 +27,10 @@ class PeminjamanScreen extends StatefulWidget {
 }
 
 class _PeminjamanScreenState extends State<PeminjamanScreen> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color muted = Color(0xFF8993A1);
-  static const Color dividerColor = Color(0xFFE9E9E9);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color muted = AppColors.grey;
+  static const Color dividerColor = AppColors.border;
 
   final supabase = Supabase.instance.client;
 
@@ -49,6 +52,21 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
   void initState() {
     super.initState();
     loadBorrowings();
+
+    // Buka formulir peminjaman bila halaman dipanggil dengan buku pilihan.
+    final selectedBook = widget.selectedBook;
+    if (selectedBook != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                FormPeminjamanScreen(book: selectedBook),
+          ),
+        );
+      });
+    }
   }
 
   // =====================================================
@@ -64,16 +82,16 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     });
 
     try {
-      final user = supabase.auth.currentUser;
+      final userId = AuthService.currentUserId;
 
-      if (user == null) {
+      if (userId == null) {
         throw Exception('Silakan login terlebih dahulu.');
       }
 
       final response = await supabase
           .from('borrowings')
           .select()
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .order('created_at', ascending: false);
 
       final transactions =
@@ -463,6 +481,15 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
           ),
 
           IconButton(
+            onPressed: _openDenda,
+            tooltip: 'Denda Saya',
+            icon: const Icon(
+              Icons.receipt_long_outlined,
+              color: navy,
+              size: 21,
+            ),
+          ),
+          IconButton(
             onPressed: loadBorrowings,
             tooltip: 'Muat ulang',
             icon: const Icon(
@@ -544,7 +571,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
                     separatorBuilder: (_, __) {
                       return const Padding(
                         padding: EdgeInsets.symmetric(
-                          vertical: 17,
+                          vertical: 12,
                         ),
                         child: Divider(
                           height: 1,
@@ -608,7 +635,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
     required VoidCallback onTap,
   }) {
     return Material(
-      color: active ? const Color(0xFFF4C95D) : navy,
+      color: active ? AppColors.yellow : navy,
       borderRadius: BorderRadius.circular(30),
       child: InkWell(
         borderRadius: BorderRadius.circular(30),
@@ -640,8 +667,8 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
                   ),
                   decoration: BoxDecoration(
                     color: active
-                        ? navy.withOpacity(0.10)
-                        : Colors.white.withOpacity(0.15),
+                        ? navy.withValues(alpha: 0.10)
+                        : Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -703,7 +730,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
         // COVER BUKU
         _buildBookCover(cover),
 
-        const SizedBox(width: 15),
+        const SizedBox(width: 12),
 
         // INFORMASI BUKU
         Expanded(
@@ -746,7 +773,7 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
                 ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
               _buildDateInfo(
                 icon: Icons.calendar_today_outlined,
@@ -823,40 +850,11 @@ class _PeminjamanScreenState extends State<PeminjamanScreen> {
   // =====================================================
 
   Widget _buildBookCover(String url) {
-    return Container(
-      width: 66,
-      height: 94,
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [
-          BoxShadow(
-            color: navy.withOpacity(0.08),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: url.isNotEmpty
-          ? Image.network(
-              url,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) {
-                return _coverFallback();
-              },
-            )
-          : _coverFallback(),
-    );
-  }
-
-  Widget _coverFallback() {
-    return const Center(
-      child: Icon(
-        Icons.menu_book_rounded,
-        color: navy,
-        size: 28,
-      ),
+    return BookCover(
+      imageUrl: url,
+      width: 62,
+      height: 88,
+      radius: 6,
     );
   }
 

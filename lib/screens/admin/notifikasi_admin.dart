@@ -2,7 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/notification_service.dart';
 import 'admin_bottom_navigation.dart';
+import 'denda_admin_screen.dart';
 import 'kelola_buku.dart';
 import 'kelola_anggota.dart';
 import 'peminjaman_admin.dart';
@@ -20,22 +24,27 @@ class _NotifikasiAdminScreenState
     extends State<NotifikasiAdminScreen> {
   final supabase = Supabase.instance.client;
 
-  static const navy = Color(0xFF2E4057);
-  static const cream = Color(0xFFF8F4EA);
-  static const muted = Color(0xFF8993A1);
-  static const border = Color(0xFFCBD0D7);
+  static const navy = AppColors.navy;
+  static const cream = AppColors.cream;
+  static const muted = AppColors.grey;
+  static const border = AppColors.border;
 
   List<Map<String, dynamic>> notifications = [];
 
   bool loading = true;
   bool showUnreadOnly = false;
 
-  int selectedIndex = 4;
+  int selectedIndex = 5;
 
   @override
   void initState() {
     super.initState();
     loadNotifications();
+  }
+
+  Future<void> refresh() async {
+    await NotificationService.runChecks();
+    await loadNotifications();
   }
 
   void message(String value) {
@@ -56,18 +65,27 @@ class _NotifikasiAdminScreenState
     setState(() => loading = true);
 
     try {
-      final response = await supabase
+      final adminId = AuthService.currentUserId;
+      final query = supabase
           .from('notifications')
           .select(
-            'id, title, message, type, is_read, created_at',
-          )
-          .order('created_at', ascending: false);
+            'id, user_id, title, message, type, is_read, created_at',
+          );
+      final response = adminId == null
+          ? await query.order('created_at', ascending: false)
+          : await query
+              .eq('user_id', adminId)
+              .order('created_at', ascending: false);
 
       if (!mounted) return;
 
+      final rows = List<Map<String, dynamic>>.from(response);
       setState(() {
-        notifications =
-            List<Map<String, dynamic>>.from(response);
+        // Tanpa sesi admin yang dikenal, hanya notifikasi warisan
+        // (user_id kosong) yang ditampilkan.
+        notifications = adminId == null
+            ? rows.where((row) => row['user_id'] == null).toList()
+            : rows;
         loading = false;
       });
     } catch (e) {
@@ -118,10 +136,20 @@ class _NotifikasiAdminScreenState
     if (unreadCount == 0) return;
 
     try {
-      await supabase
-          .from('notifications')
-          .update({'is_read': true})
-          .eq('is_read', false);
+      final adminId = AuthService.currentUserId;
+      if (adminId != null) {
+        await NotificationService.markAllRead(adminId);
+      } else {
+        final legacyIds = notifications
+            .map((item) => item['id'])
+            .where((id) => id != null)
+            .toList();
+        if (legacyIds.isEmpty) return;
+        await supabase
+            .from('notifications')
+            .update({'is_read': true})
+            .inFilter('id', legacyIds);
+      }
 
       if (!mounted) return;
 
@@ -137,15 +165,33 @@ class _NotifikasiAdminScreenState
     }
   }
 
+  /// Pesan dari NotificationService diawali "[dedupe-key] ".
+  String cleanMessage(dynamic value) {
+    final text = value?.toString() ?? '-';
+    final index = text.indexOf('] ');
+    if (text.startsWith('[') && index >= 0) {
+      return text.substring(index + 2);
+    }
+    return text;
+  }
+
   IconData notificationIcon(String? type) {
     switch (type) {
       case 'borrowing':
+      case 'peminjaman':
+      case 'peminjaman_ditolak':
         return Icons.menu_book_rounded;
       case 'overdue':
+      case 'denda':
         return Icons.warning_amber_rounded;
+      case 'pembayaran_denda':
+        return Icons.account_balance_wallet_outlined;
+      case 'pengingat':
+        return Icons.alarm_rounded;
       case 'member':
         return Icons.person_add_alt_1_rounded;
       case 'returned':
+      case 'pengembalian':
         return Icons.assignment_return_rounded;
       default:
         return Icons.notifications_none_rounded;
@@ -155,10 +201,17 @@ class _NotifikasiAdminScreenState
   Color notificationColor(String? type) {
     switch (type) {
       case 'overdue':
+      case 'denda':
+      case 'peminjaman_ditolak':
         return Colors.redAccent;
+      case 'pembayaran_denda':
+        return const Color(0xFFB8860B);
+      case 'pengingat':
+        return const Color(0xFF4787A8);
       case 'member':
         return const Color(0xFF65A77A);
       case 'returned':
+      case 'pengembalian':
         return const Color(0xFF4787A8);
       default:
         return navy;
@@ -223,7 +276,7 @@ class _NotifikasiAdminScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              item['message']?.toString() ?? '-',
+              cleanMessage(item['message']),
               style: const TextStyle(
                 color: navy,
                 fontSize: 13,
@@ -273,6 +326,9 @@ class _NotifikasiAdminScreenState
         page = const PeminjamanAdminScreen();
         break;
       case 4:
+        page = const DendaAdminScreen();
+        break;
+      case 5:
         page = const ProfileAdminScreen();
         break;
     }
@@ -290,7 +346,7 @@ class _NotifikasiAdminScreenState
     final data = filteredNotifications;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.cream,
       body: SafeArea(
         child: Column(
           children: [
@@ -308,7 +364,7 @@ class _NotifikasiAdminScreenState
                       ? emptyState()
                       : RefreshIndicator(
                           color: navy,
-                          onRefresh: loadNotifications,
+                          onRefresh: refresh,
                           child: ListView.builder(
                             padding: const EdgeInsets.fromLTRB(
                               16,
@@ -446,9 +502,9 @@ class _NotifikasiAdminScreenState
         decoration: BoxDecoration(
           color: isRead
               ? Colors.white
-              : const Color(0xFFFAFBFD),
+              : AppColors.input,
           border: Border.all(
-            color: isRead ? border : navy.withOpacity(0.55),
+            color: isRead ? border : navy.withValues(alpha: 0.55),
           ),
           borderRadius: BorderRadius.circular(9),
         ),
@@ -482,7 +538,7 @@ class _NotifikasiAdminScreenState
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    item['message']?.toString() ?? '-',
+                    cleanMessage(item['message']),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -495,7 +551,7 @@ class _NotifikasiAdminScreenState
                     formatDate(item['created_at']),
                     style: const TextStyle(
                       color: muted,
-                      fontSize: 9,
+                      fontSize: 10,
                     ),
                   ),
                 ],
@@ -519,7 +575,7 @@ class _NotifikasiAdminScreenState
   Widget emptyState() {
     return RefreshIndicator(
       color: navy,
-      onRefresh: loadNotifications,
+      onRefresh: refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [

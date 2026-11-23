@@ -1,7 +1,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../core/constants/app_colors.dart';
+import '../../core/services/notification_service.dart';
+import '../../widgets/book_cover.dart';
 
 class FormPeminjamanScreen extends StatefulWidget {
   final Map<String, dynamic> book;
@@ -18,7 +21,8 @@ class FormPeminjamanScreen extends StatefulWidget {
 
 class _FormPeminjamanScreenState
     extends State<FormPeminjamanScreen> {
-  int? selectedDuration;
+  // Durasi standar sesuai kebijakan LokaBaca (3 hari, dapat diperpanjang 3 hari).
+  int? selectedDuration = 3;
 
   final TextEditingController noteController =
       TextEditingController();
@@ -28,9 +32,9 @@ class _FormPeminjamanScreenState
   bool isLoading = false;
 
   static const Color navy = AppColors.navy;
-  static const Color cream = Color(0xFFFAF5EB);
-  static const Color muted = Color(0xFF8993A1);
-  static const Color border = Color(0xFFE5DED1);
+  static const Color cream = AppColors.input;
+  static const Color muted = AppColors.grey;
+  static const Color border = AppColors.border;
 
   DateTime? get dueDate {
     if (selectedDuration == null) return null;
@@ -142,16 +146,31 @@ class _FormPeminjamanScreenState
           '${selectedDueDate.month.toString().padLeft(2, '0')}-'
           '${selectedDueDate.day.toString().padLeft(2, '0')}';
 
-      await supabase.from('borrowings').insert({
-        'user_id': user.id,
-        'book_id': bookId,
-        'borrowed_at': now.toUtc().toIso8601String(),
-        'due_date': dueDateString,
-        'status': 'Dipinjam',
-        'note': noteController.text.trim().isEmpty
-            ? null
-            : noteController.text.trim(),
-      });
+      // Status Menunggu: admin yang menyetujui atau menolak pengajuan.
+      final inserted = await supabase
+          .from('borrowings')
+          .insert({
+            'user_id': user.id,
+            'book_id': bookId,
+            'borrowed_at': now.toUtc().toIso8601String(),
+            'due_date': dueDateString,
+            'status': 'Menunggu',
+            'note': noteController.text.trim().isEmpty
+                ? null
+                : noteController.text.trim(),
+          })
+          .select('id')
+          .single();
+
+      final borrowingId = inserted['id']?.toString();
+      if (borrowingId != null) {
+        try {
+          await NotificationService.notifyNewLoanRequest(borrowingId);
+        } catch (e) {
+          // Pengajuan tetap tersimpan walaupun notifikasi gagal dikirim.
+          debugPrint('NOTIF PENGAJUAN ERROR: $e');
+        }
+      }
 
       if (!mounted) return;
 
@@ -250,37 +269,12 @@ class _FormPeminjamanScreenState
   // =====================================================
 
   Widget _buildCover(String cover) {
-    if (cover.isEmpty) {
-      return _coverPlaceholder();
-    }
-
-    if (cover.startsWith('http')) {
-      return Image.network(
-        cover,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            _coverPlaceholder(),
-      );
-    }
-
-    return Image.asset(
-      cover,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) =>
-          _coverPlaceholder(),
-    );
-  }
-
-  Widget _coverPlaceholder() {
-    return Container(
-      color: cream,
-      child: const Center(
-        child: Icon(
-          Icons.menu_book_rounded,
-          size: 38,
-          color: navy,
-        ),
-      ),
+    // BookCover menangani baik path aset maupun URL http Supabase Storage.
+    return BookCover(
+      imageUrl: cover,
+      width: 88,
+      height: 126,
+      radius: 7,
     );
   }
 
@@ -338,7 +332,8 @@ class _FormPeminjamanScreenState
                     const SizedBox(height: 7),
 
                     const Text(
-                      'Pilih lama waktu peminjaman buku.',
+                      'Durasi standar 3 hari (opsional 7 hari). '
+                      'Perpanjang 1x untuk tambahan 3 hari.',
                       style: TextStyle(
                         fontSize: 12,
                         color: muted,
@@ -349,9 +344,9 @@ class _FormPeminjamanScreenState
 
                     Row(
                       children: [
-                        _durationButton(7),
+                        _durationButton(3),
                         const SizedBox(width: 14),
-                        _durationButton(14),
+                        _durationButton(7),
                       ],
                     ),
 
@@ -472,7 +467,7 @@ class _FormPeminjamanScreenState
               borderRadius: BorderRadius.circular(7),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
+                  color: Colors.black.withValues(alpha: 0.12),
                   blurRadius: 6,
                   offset: const Offset(2, 3),
                 ),
@@ -630,7 +625,7 @@ class _FormPeminjamanScreenState
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: navy.withOpacity(0.08),
+              color: navy.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(

@@ -1,13 +1,16 @@
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
 import '../auth/login_screen.dart';
 import 'admin_bottom_navigation.dart';
+import 'denda_admin_screen.dart';
 import 'edit_profile_admin.dart';
 import 'dashboard_admin.dart';
 import 'kelola_buku.dart';
 import 'kelola_anggota.dart';
+import 'pengaturan_admin_page.dart';
 import 'peminjaman_admin.dart';
 
 class ProfileAdminScreen extends StatefulWidget {
@@ -23,15 +26,15 @@ class ProfileAdminScreen extends StatefulWidget {
       _ProfileAdminScreenState();
 }
 
-class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color mutedText = Color(0xFF9299A5);
-  static const Color yellow = Color(0xFFF4C95D);
-  static const Color borderColor = Color(0xFF50647D);
-  static const Color red = Color(0xFFFF4545);
+class _ProfileAdminScreenState extends State<ProfileAdminScreen>
+    with WidgetsBindingObserver {
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color mutedText = AppColors.grey;
+  static const Color yellow = AppColors.yellow;
+  static const Color borderColor = AppColors.border;
+  static const Color red = Color(0xFFD94343);
 
-  final SupabaseClient supabase = Supabase.instance.client;
 
   Map<String, dynamic>? profile;
 
@@ -43,7 +46,21 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     loadProfile();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      loadProfile();
+    }
   }
 
   // LOAD PROFILE
@@ -56,9 +73,7 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
     });
 
     try {
-      final user = supabase.auth.currentUser;
-
-      if (user == null) {
+      if (AuthService.currentUserId == null) {
         if (!mounted) return;
 
         setState(() {
@@ -69,11 +84,7 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
         return;
       }
 
-      final response = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url, role, phone')
-          .eq('id', user.id)
-          .maybeSingle();
+      final response = await AuthService.currentProfile();
 
       if (!mounted) return;
 
@@ -125,7 +136,7 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
       return;
     }
 
-    if (index == 4) return;
+    if (index == 5) return;
 
     Widget? destination;
 
@@ -141,6 +152,9 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
         break;
       case 3:
         destination = const PeminjamanAdminScreen();
+        break;
+      case 4:
+        destination = const DendaAdminScreen();
         break;
     }
 
@@ -188,6 +202,26 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => const KelolaAnggotaPage(),
+      ),
+    );
+  }
+
+  // OPEN DENDA
+  void openDenda() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const DendaAdminScreen(),
+      ),
+    );
+  }
+
+  // OPEN PENGATURAN
+  void openSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const PengaturanAdminPage(),
       ),
     );
   }
@@ -273,7 +307,7 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
 
     try {
       // 1. Keluar dari akun Supabase.
-      await supabase.auth.signOut();
+      await AuthService.signOut();
 
       if (!mounted) return;
 
@@ -310,7 +344,7 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
                 : _buildContent(),
       ),
       bottomNavigationBar: AdminBottomNavigation(
-        currentIndex: 4,
+        currentIndex: 5,
         onTap: handleNavigation,
       ),
     );
@@ -375,8 +409,6 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
 
   // MAIN CONTENT
   Widget _buildContent() {
-    final user = supabase.auth.currentUser;
-
     final name = profile?['full_name']
                 ?.toString()
                 .trim()
@@ -385,7 +417,7 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
         ? profile!['full_name'].toString().trim()
         : 'Admin';
 
-    final email = user?.email ?? '-';
+    final email = profile?['email']?.toString() ?? '-';
 
     final avatarUrl =
         profile?['avatar_url']?.toString() ?? '';
@@ -454,7 +486,7 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
                     onTap: openEditProfile,
                   ),
 
-                  const SizedBox(height: 19),
+                  const Divider(height: 16, color: borderColor),
 
                   _buildMenuItem(
                     icon: Icons.menu_book_outlined,
@@ -464,7 +496,16 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
                     onTap: openBorrowing,
                   ),
 
-                  const SizedBox(height: 19),
+                  const SizedBox(height: 12),
+
+                  _buildMenuItem(
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'Denda',
+                    subtitle: 'Lihat dan konfirmasi denda peminjaman',
+                    onTap: openDenda,
+                  ),
+
+                  const Divider(height: 16, color: borderColor),
 
                   _buildMenuItem(
                     icon: Icons.people_outline_rounded,
@@ -474,35 +515,17 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
                     onTap: openMembers,
                   ),
 
-                  const SizedBox(height: 19),
+                  const Divider(height: 16, color: borderColor),
 
                   _buildMenuItem(
                     icon: Icons.settings_outlined,
                     title: 'Pengaturan Aplikasi',
                     subtitle:
                         'Sesuaikan preferensi aplikasi',
-                    onTap: () {
-                      showMessage(
-                        'Silakan buka menu Pengaturan Admin.',
-                      );
-                    },
+                    onTap: openSettings,
                   ),
 
-                  const SizedBox(height: 19),
-
-                  _buildMenuItem(
-                    icon: Icons.help_outline_rounded,
-                    title: 'Dukungan dan Layanan',
-                    subtitle:
-                        'Temukan bantuan dan informasi layanan',
-                    onTap: () {
-                      showMessage(
-                        'Informasi layanan belum tersedia.',
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 35),
+                  const SizedBox(height: 24),
 
                   _buildLogoutButton(),
 
@@ -664,7 +687,7 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: mutedText,
-                      fontSize: 9,
+                      fontSize: 10,
                       height: 1.3,
                     ),
                   ),
@@ -687,7 +710,7 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
   Widget _buildLogoutButton() {
     return SizedBox(
       width: double.infinity,
-      height: 48,
+      height: 40,
       child: OutlinedButton.icon(
         onPressed: isLoggingOut ? null : confirmLogout,
         icon: isLoggingOut
@@ -702,13 +725,13 @@ class _ProfileAdminScreenState extends State<ProfileAdminScreen> {
             : const Icon(
                 Icons.logout_rounded,
                 color: red,
-                size: 19,
+                size: 18,
               ),
         label: Text(
           isLoggingOut ? 'Keluar...' : 'Keluar',
           style: const TextStyle(
             color: red,
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
         ),

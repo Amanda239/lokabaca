@@ -1,12 +1,16 @@
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../widgets/book_cover.dart';
 import 'admin_bottom_navigation.dart';
 import 'dashboard_admin.dart';
+import 'denda_admin_screen.dart';
 import 'kelola_anggota.dart';
 import 'peminjaman_admin.dart';
 import 'profile_admin.dart';
@@ -19,20 +23,23 @@ class KelolaBukuScreen extends StatefulWidget {
 }
 
 class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
-  static const navy = Color(0xFF2E4057);
-  static const cream = Color(0xFFF7F3E9);
-  static const muted = Color(0xFF8B929C);
-  static const border = Color(0xFFC9C4BA);
+  static const navy = AppColors.navy;
+  static const cream = AppColors.cream;
+  static const muted = AppColors.grey;
+  static const border = AppColors.border;
 
   final supabase = Supabase.instance.client;
   final searchController = TextEditingController();
 
   List<Map<String, dynamic>> books = [];
+  List<String> dbCategories = [];
 
   bool loading = true;
   String? loadError;
   String keyword = '';
   int selectedIndex = 1;
+
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -42,6 +49,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     searchController.dispose();
     super.dispose();
   }
@@ -67,17 +75,56 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
     });
 
     try {
-      final rows = await supabase
+      // Pencarian dilakukan di database, bukan hanya di daftar yang termuat.
+      final term = keyword
+          .trim()
+          .replaceAll(RegExp(r'[%,()]'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      var query = supabase.from('books').select(
+            'id,title,author,category,description,cover_url,rating,stock,'
+            'created_at,published_year,pages',
+          );
+      if (term.isNotEmpty) {
+        query = query.or(
+          'title.ilike.%$term%,author.ilike.%$term%,category.ilike.%$term%',
+        );
+      }
+      final rows = await query.order('created_at', ascending: false);
+      final loaded = List<Map<String, dynamic>>.from(rows);
+
+      // `publisher` mungkin belum ada di database; baca terpisah agar
+      // kegagalan kolom tidak menghalangi daftar buku.
+      try {
+        final publisherRows = await supabase
+            .from('books')
+            .select('id,publisher');
+        final publisherMap = {
+          for (final row in publisherRows)
+            row['id'].toString(): row['publisher'],
+        };
+        for (final book in loaded) {
+          book['publisher'] = publisherMap[book['id'].toString()] ?? '';
+        }
+      } catch (_) {
+        // Kolom belum tersedia - abaikan.
+      }
+
+      final categoryRows = await supabase
           .from('books')
-          .select(
-            'id,title,author,category,description,cover_url,rating,stock,created_at',
-          )
-          .order('created_at', ascending: false);
+          .select('category');
+      final categories = <String>{
+        for (final row in categoryRows)
+          if (row['category'] != null &&
+              row['category'].toString().trim().isNotEmpty)
+          row['category'].toString().trim(),
+      };
 
       if (!mounted) return;
 
       setState(() {
-        books = List<Map<String, dynamic>>.from(rows);
+        books = loaded;
+        dbCategories = categories.toList()..sort();
         loading = false;
       });
     } catch (e) {
@@ -115,7 +162,10 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
     final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => FormBukuScreen(book: book),
+        builder: (_) => FormBukuScreen(
+          book: book,
+          categories: dbCategories,
+        ),
       ),
     );
 
@@ -187,7 +237,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
   Future<void> onBottomTap(int index) async {
     if (index == selectedIndex) return;
 
-    if (index < 0 || index > 4) return;
+    if (index < 0 || index > 5) return;
 
     Widget? page;
 
@@ -205,6 +255,9 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
         page = const PeminjamanAdminScreen();
         break;
       case 4:
+        page = const DendaAdminScreen();
+        break;
+      case 5:
         page = const ProfileAdminScreen();
         break;
     }
@@ -320,6 +373,11 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
         controller: searchController,
         onChanged: (value) {
           setState(() => keyword = value);
+          _searchDebounce?.cancel();
+          _searchDebounce = Timer(
+            const Duration(milliseconds: 350),
+            () => loadBooks(),
+          );
         },
         style: const TextStyle(
           color: navy,
@@ -421,7 +479,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
                   Icon(
                     Icons.menu_book_outlined,
                     size: 54,
-                    color: navy.withOpacity(.35),
+                    color: navy.withValues(alpha: .35),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -469,11 +527,11 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border.all(color: navy.withOpacity(.28)),
+        border: Border.all(color: navy.withValues(alpha: .28)),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: navy.withOpacity(.045),
+            color: navy.withValues(alpha: .045),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -482,7 +540,7 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
       child: Row(
         children: [
           BookCover(
-            cover: book['cover_url'],
+            imageUrl: book['cover_url']?.toString(),
             width: 62,
             height: 88,
           ),
@@ -580,10 +638,12 @@ class _KelolaBukuScreenState extends State<KelolaBukuScreen> {
 
 class FormBukuScreen extends StatefulWidget {
   final Map<String, dynamic>? book;
+  final List<String> categories;
 
   const FormBukuScreen({
     super.key,
     this.book,
+    this.categories = const <String>[],
   });
 
   @override
@@ -591,10 +651,10 @@ class FormBukuScreen extends StatefulWidget {
 }
 
 class _FormBukuScreenState extends State<FormBukuScreen> {
-  static const navy = Color(0xFF2E4057);
-  static const cream = Color(0xFFF7F3E9);
-  static const muted = Color(0xFF9297A0);
-  static const border = Color(0xFFC9C4BA);
+  static const navy = AppColors.navy;
+  static const cream = AppColors.cream;
+  static const muted = AppColors.grey;
+  static const border = AppColors.border;
 
   final supabase = Supabase.instance.client;
   final picker = ImagePicker();
@@ -604,8 +664,11 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
   final authorController = TextEditingController();
   final stockController = TextEditingController();
   final descriptionController = TextEditingController();
+  final pagesController = TextEditingController();
+  final publisherController = TextEditingController();
 
-  final List<String> categories = [
+  /// Kategori bawaan digabung dengan kategori yang ada di database.
+  late final List<String> categories = <String>{
     'Fiksi',
     'Nonfiksi',
     'Novel',
@@ -617,7 +680,8 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
     'Komik',
     'Agama',
     'Sains',
-  ];
+    ...widget.categories,
+  }.toList();
 
   String? category;
   String? existingCover;
@@ -642,6 +706,9 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
       stockController.text = (book['stock'] ?? 0).toString();
       descriptionController.text =
           (book['description'] ?? '').toString();
+      pagesController.text = (book['pages'] ?? '').toString();
+      publisherController.text =
+          (book['publisher'] ?? '').toString();
 
       category = book['category']?.toString();
       existingCover = book['cover_url']?.toString().trim();
@@ -660,6 +727,8 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
     authorController.dispose();
     stockController.dispose();
     descriptionController.dispose();
+    pagesController.dispose();
+    publisherController.dispose();
     super.dispose();
   }
 
@@ -818,45 +887,48 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
 
     if (!formKey.currentState!.validate()) return;
 
-    final hasCover = pickedBytes != null ||
-        (!coverRemoved &&
-            existingCover != null &&
-            existingCover!.trim().isNotEmpty);
-
-    if (!hasCover) {
-      message('Cover buku wajib ditambahkan.');
-      return;
-    }
-
     setState(() => saving = true);
 
     try {
       final coverUrl = await _uploadCover();
+      final description = descriptionController.text.trim();
+      final publisher = publisherController.text.trim();
 
       final payload = <String, dynamic>{
         'title': titleController.text.trim(),
         'author': authorController.text.trim(),
         'category': category,
-        'description': descriptionController.text.trim(),
+        'description': description,
         'cover_url': coverUrl,
-        'stock': int.parse(stockController.text.trim()),
+        'stock': int.tryParse(stockController.text.trim()) ?? 0,
+        'pages': int.tryParse(pagesController.text.trim()) ?? 0,
+      };
+      final withPublisher = <String, dynamic>{
+        ...payload,
+        'publisher': publisher,
+      };
+      // Kolom `publisher` belum tentu ada di database. Jika gagal,
+      // simpan keterangan penerbit di awal deskripsi.
+      final fallbackPayload = <String, dynamic>{
+        ...payload,
+        'description': publisher.isEmpty
+            ? description
+            : 'Penerbit: $publisher'
+                '${description.isEmpty ? '' : '\n$description'}',
       };
 
       if (isEdit) {
-        final updated = await supabase
-            .from('books')
-            .update(payload)
-            .eq('id', widget.book!['id'])
-            .select('id')
-            .maybeSingle();
-
-        if (updated == null) {
-          throw Exception(
-            'Data tidak berubah. Periksa izin UPDATE pada RLS tabel books.',
-          );
+        try {
+          await _commitUpdate(withPublisher);
+        } on PostgrestException {
+          await _commitUpdate(fallbackPayload);
         }
       } else {
-        await supabase.from('books').insert(payload);
+        try {
+          await supabase.from('books').insert(withPublisher);
+        } on PostgrestException {
+          await supabase.from('books').insert(fallbackPayload);
+        }
       }
 
       if (!mounted) return;
@@ -867,6 +939,21 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
 
       setState(() => saving = false);
       message('Gagal menyimpan buku: $e');
+    }
+  }
+
+  Future<void> _commitUpdate(Map<String, dynamic> payload) async {
+    final updated = await supabase
+        .from('books')
+        .update(payload)
+        .eq('id', widget.book!['id'])
+        .select('id')
+        .maybeSingle();
+
+    if (updated == null) {
+      throw Exception(
+        'Data tidak berubah. Periksa izin UPDATE pada RLS tabel books.',
+      );
     }
   }
 
@@ -932,12 +1019,35 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                               },
                             ),
                             const SizedBox(height: 12),
-                            _label('Deskripsi *'),
+                            _label('Jumlah Halaman'),
+                            _input(
+                              controller: pagesController,
+                              hint: 'Masukkan jumlah halaman',
+                              keyboardType: TextInputType.number,
+                              validator: (value) {
+                                final text = (value ?? '').trim();
+                                if (text.isEmpty) return null;
+                                final number = int.tryParse(text);
+                                if (number == null || number < 0) {
+                                  return 'Masukkan jumlah halaman berupa angka.';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            _label('Penerbit'),
+                            _input(
+                              controller: publisherController,
+                              hint: 'Masukkan nama penerbit',
+                              validator: (_) => null,
+                            ),
+                            const SizedBox(height: 12),
+                            _label('Deskripsi'),
                             _input(
                               controller: descriptionController,
-                              hint: 'Masukkan deskripsi buku',
+                              hint: 'Masukkan deskripsi buku (opsional)',
                               maxLines: 3,
-                              validator: _required,
+                              validator: (_) => null,
                             ),
                             const SizedBox(height: 24),
                             _actions(),
@@ -1016,7 +1126,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
                       fit: BoxFit.cover,
                     )
                   : BookCover(
-                      cover: existingCover,
+                      imageUrl: existingCover,
                       width: 68,
                       height: 104,
                     ),
@@ -1067,7 +1177,7 @@ class _FormBukuScreenState extends State<FormBukuScreen> {
       borderRadius: BorderRadius.circular(10),
       child: CustomPaint(
         painter: _DashedBorderPainter(
-          color: navy.withOpacity(.75),
+          color: navy.withValues(alpha: .75),
           radius: 10,
         ),
         child: Container(
@@ -1396,113 +1506,3 @@ class _DashedBorderPainter extends CustomPainter {
   }
 }
 
-// BOOK COVER
-
-class BookCover extends StatelessWidget {
-  final dynamic cover;
-  final double width;
-  final double height;
-
-  const BookCover({
-    super.key,
-    required this.cover,
-    this.width = 55,
-    this.height = 82,
-  });
-
-  bool get _isNetworkImage {
-    final value = cover?.toString().trim() ?? '';
-    final uri = Uri.tryParse(value);
-
-    return uri != null &&
-        (uri.scheme.toLowerCase() == 'http' ||
-            uri.scheme.toLowerCase() == 'https') &&
-        uri.host.isNotEmpty;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (cover is Uint8List) {
-      return _frame(
-        Image.memory(
-          cover as Uint8List,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _placeholder(),
-        ),
-      );
-    }
-
-    final path = cover?.toString().trim() ?? '';
-
-    if (path.isEmpty) {
-      return _frame(_placeholder());
-    }
-
-    if (_isNetworkImage) {
-      return _frame(
-        Image.network(
-          path,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-
-            return Container(
-              width: width,
-              height: height,
-              color: const Color(0xFFEAE6DE),
-              alignment: Alignment.center,
-              child: const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFF2E4057),
-                ),
-              ),
-            );
-          },
-          errorBuilder: (_, __, ___) => _placeholder(),
-        ),
-      );
-    }
-
-    return _frame(
-      Image.asset(
-        path,
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _placeholder(),
-      ),
-    );
-  }
-
-  Widget _frame(Widget child) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: SizedBox(
-        width: width,
-        height: height,
-        child: child,
-      ),
-    );
-  }
-
-  Widget _placeholder() {
-    return Container(
-      width: width,
-      height: height,
-      color: const Color(0xFF2E4057),
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.menu_book_rounded,
-        color: Colors.white,
-        size: 27,
-      ),
-    );
-  }
-}

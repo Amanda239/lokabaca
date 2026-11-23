@@ -202,11 +202,11 @@ class _UbahPasswordScreenState extends State<UbahPasswordScreen> {
     return Container(
       height: 44,
       decoration: BoxDecoration(
-        color: const Color(0xFFFAF5EB),
+        color: AppColors.input,
         borderRadius: BorderRadius.circular(13),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.20),
+            color: Colors.black.withValues(alpha: 0.20),
             blurRadius: 4,
             offset: const Offset(1, 2),
           ),

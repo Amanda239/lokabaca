@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
 import '../auth/login_screen.dart';
+import 'admin_bottom_navigation.dart';
 import 'dashboard_admin.dart';
+import 'denda_admin_screen.dart';
 import 'kelola_buku.dart';
 import 'kelola_anggota.dart';
 import 'peminjaman_admin.dart';
+import 'profile_admin.dart';
 
 class PengaturanAdminPage extends StatefulWidget {
   const PengaturanAdminPage({super.key});
@@ -15,10 +20,7 @@ class PengaturanAdminPage extends StatefulWidget {
 
 class _PengaturanAdminPageState extends State<PengaturanAdminPage> {
   bool isNotificationEnabled = true;
-
-  static const Color navy = Color(0xFF183153);
-  static const Color cream = Color(0xFFF7F3EA);
-  static const Color muted = Color(0xFFE8E3D9);
+  bool isSigningOut = false;
 
   void toggleNotification() {
     setState(() {
@@ -33,51 +35,65 @@ class _PengaturanAdminPageState extends State<PengaturanAdminPage> {
     );
   }
 
+  Future<void> signOut() async {
+    if (isSigningOut) return;
+    setState(() => isSigningOut = true);
+    try {
+      await AuthService.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isSigningOut = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal keluar dari akun: $e'),
+          backgroundColor: AppColors.navy,
+        ),
+      );
+    }
+  }
+
   void showLogoutDialog() {
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: cream,
-          title: const Text(
-            'Keluar dari akun?',
-            style: TextStyle(
-              color: navy,
-              fontWeight: FontWeight.bold,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.cream,
+        title: const Text(
+          'Keluar dari akun?',
+          style: TextStyle(
+            color: AppColors.navy,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: const Text(
+          'Apakah kamu yakin ingin keluar dari akun admin?',
+          style: TextStyle(color: AppColors.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text(
+              'Batal',
+              style: TextStyle(color: AppColors.navy),
             ),
           ),
-          content: const Text(
-            'Apakah kamu yakin ingin keluar dari akun admin?',
-            style: TextStyle(color: navy),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.navy,
+              foregroundColor: AppColors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              signOut();
+            },
+            child: Text(isSigningOut ? 'Keluar...' : 'Keluar'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Batal',
-                style: TextStyle(color: navy),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: navy,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const LoginScreen(),
-                  ),
-                  (route) => false,
-                );
-              },
-              child: const Text('Keluar'),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 
@@ -89,149 +105,112 @@ class _PengaturanAdminPageState extends State<PengaturanAdminPage> {
     VoidCallback? onTap,
   }) {
     return Card(
-      color: Colors.white,
+      color: AppColors.white,
       elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.border),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 6,
+          horizontal: 14,
+          vertical: 2,
         ),
         leading: Container(
-          width: 42,
-          height: 42,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
-            color: cream,
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.input,
+            borderRadius: BorderRadius.circular(9),
           ),
-          child: Icon(icon, color: navy),
+          child: Icon(icon, color: AppColors.navy, size: 18),
         ),
         title: Text(
           title,
           style: const TextStyle(
-            color: navy,
-            fontWeight: FontWeight.w600,
+            color: AppColors.navy,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
           ),
         ),
         subtitle: subtitle == null
             ? null
             : Text(
                 subtitle,
-                style: const TextStyle(color: Colors.grey),
+                style: const TextStyle(
+                  color: AppColors.grey,
+                  fontSize: 10,
+                ),
               ),
         trailing: trailing ??
             const Icon(
               Icons.chevron_right,
-              color: navy,
+              color: AppColors.navy,
+              size: 19,
             ),
         onTap: onTap,
       ),
     );
   }
 
-  Widget buildBottomNavigation() {
-    return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed,
-      currentIndex: 4,
-      selectedItemColor: navy,
-      unselectedItemColor: Colors.grey,
-      backgroundColor: Colors.white,
-      onTap: (index) {
-        switch (index) {
-          case 0:
-            navigateTo(const DashboardAdmin());
-            break;
-          case 1:
-            navigateTo(const KelolaBukuScreen());
-            break;
-          case 2:
-            navigateTo(const KelolaAnggotaPage());
-            break;
-          case 3:
-            navigateTo(const PeminjamanAdminScreen());
-            break;
-          case 4:
-            break;
-        }
-      },
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.dashboard_outlined),
-          label: 'Beranda',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.menu_book_outlined),
-          label: 'Buku',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.people_outline),
-          label: 'Anggota',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.assignment_outlined),
-          label: 'Peminjaman',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.settings_outlined),
-          label: 'Pengaturan',
-        ),
-      ],
-    );
+  void handleNavigation(int index) {
+    if (index == 5) return;
+    final Widget page = switch (index) {
+      0 => const DashboardAdmin(),
+      1 => const KelolaBukuScreen(),
+      2 => const KelolaAnggotaPage(),
+      3 => const PeminjamanAdminScreen(),
+      4 => const DendaAdminScreen(),
+      _ => const ProfileAdminScreen(),
+    };
+    navigateTo(page);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: cream,
+      backgroundColor: AppColors.cream,
       appBar: AppBar(
-        backgroundColor: navy,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.navy,
+        foregroundColor: AppColors.white,
         elevation: 0,
         centerTitle: true,
         title: const Text(
           'Pengaturan Admin',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
-
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
               'Pengaturan',
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 19,
                 fontWeight: FontWeight.bold,
-                color: navy,
+                color: AppColors.navy,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             const Text(
               'Atur preferensi dan informasi aplikasi.',
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: AppColors.grey, fontSize: 11),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             const Text(
               'Preferensi',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: navy,
+                color: AppColors.navy,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 9),
 
             buildSettingTile(
               icon: Icons.notifications_outlined,
@@ -239,41 +218,50 @@ class _PengaturanAdminPageState extends State<PengaturanAdminPage> {
               subtitle: 'Aktifkan atau nonaktifkan notifikasi',
               trailing: Switch(
                 value: isNotificationEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    isNotificationEnabled = value;
-                  });
-                },
-                activeColor: Colors.white,
-                activeTrackColor: const Color(0xFF8298B0),
-                inactiveTrackColor: muted,
+                onChanged: (value) => toggleNotification(),
+                activeColor: AppColors.white,
+                activeTrackColor: AppColors.navy,
+                inactiveTrackColor: AppColors.border,
               ),
             ),
 
+            const SizedBox(height: 10),
+
+            const Text(
+              'Akun',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppColors.navy,
+              ),
+            ),
+            const SizedBox(height: 9),
+
             buildSettingTile(
-              icon: Icons.language_outlined,
-              title: 'Bahasa',
-              subtitle: 'Bahasa Indonesia',
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Pengaturan bahasa belum tersedia.'),
-                  ),
-                );
-              },
+              icon: Icons.person_outline,
+              title: 'Profil Admin',
+              subtitle: 'Lihat dan edit informasi akun admin',
+              onTap: () => navigateTo(const ProfileAdminScreen()),
             ),
 
-            const SizedBox(height: 16),
+            buildSettingTile(
+              icon: Icons.account_balance_wallet_outlined,
+              title: 'Denda',
+              subtitle: 'Kelola dan konfirmasi denda anggota',
+              onTap: () => navigateTo(const DendaAdminScreen()),
+            ),
+
+            const SizedBox(height: 10),
 
             const Text(
               'Informasi Aplikasi',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: navy,
+                color: AppColors.navy,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 9),
 
             buildSettingTile(
               icon: Icons.info_outline,
@@ -289,32 +277,7 @@ class _PengaturanAdminPageState extends State<PengaturanAdminPage> {
               },
             ),
 
-            buildSettingTile(
-              icon: Icons.privacy_tip_outlined,
-              title: 'Kebijakan Privasi',
-              subtitle: 'Informasi kebijakan privasi aplikasi',
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Halaman kebijakan privasi belum tersedia.',
-                    ),
-                  ),
-                );
-              },
-            ),
-
-            const SizedBox(height: 16),
-
-            const Text(
-              'Akun',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: navy,
-              ),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
 
             buildSettingTile(
               icon: Icons.logout,
@@ -322,27 +285,27 @@ class _PengaturanAdminPageState extends State<PengaturanAdminPage> {
               subtitle: 'Keluar dari akun admin',
               trailing: const Icon(
                 Icons.chevron_right,
-                color: Colors.red,
+                color: Color(0xFFD94343),
+                size: 19,
               ),
               onTap: showLogoutDialog,
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
             const Center(
               child: Text(
                 'LokaBaca v1.0.0',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: AppColors.grey, fontSize: 11),
               ),
             ),
           ],
         ),
       ),
-
-      bottomNavigationBar: buildBottomNavigation(),
+      bottomNavigationBar: AdminBottomNavigation(
+        currentIndex: 5,
+        onTap: handleNavigation,
+      ),
     );
   }
 }

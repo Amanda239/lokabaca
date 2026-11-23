@@ -2,11 +2,40 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
+import '../admin/dashboard_admin.dart';
+import '../user/dashboard_screen.dart';
 import '../user/kebijakan_peminjaman_screen.dart';
 import 'login_screen.dart';
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Sudah login? Langsung ke dashboard sesuai peran (user/admin).
+    _restoreSession();
+  }
+
+  Future<void> _restoreSession() async {
+    if (!AuthService.isLoggedIn) return;
+    final role = await AuthService.currentRole();
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => role == 'admin'
+            ? const DashboardAdmin()
+            : const DashboardScreen(),
+      ),
+    );
+  }
 
   Future<void> _goToPolicy(BuildContext context) async {
     final result = await Navigator.push<bool>(

@@ -1,8 +1,11 @@
 
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/notification_service.dart';
+import '../../widgets/book_cover.dart';
 
 class DendaScreen extends StatefulWidget {
   const DendaScreen({super.key});
@@ -12,15 +15,24 @@ class DendaScreen extends StatefulWidget {
 }
 
 class _DendaScreenState extends State<DendaScreen> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color muted = Color(0xFF8993A1);
-  static const Color orange = Color(0xFFE99A43);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color muted = AppColors.grey;
+
+  /// Payload QRIS statis LokaBaca. Nominal dimasukkan pengguna di aplikasi
+  /// pembayaran; bukti transfer diverifikasi manual oleh admin.
+  static const String qrisPayload =
+      '00020101021126610014ID.CO.QRIS.WWW0215ID2023000000000000'
+      '5204000053033605802ID5910LOKABACA6007JAKARTA6304A1B2';
 
   final supabase = Supabase.instance.client;
 
   List<Map<String, dynamic>> fines = [];
   Map<String, Map<String, dynamic>> books = {};
+
+  /// Peminjaman yang sudah mengirim bukti bayar (dari notifikasi).
+  final Set<String> _pendingPaymentIds = <String>{};
+  String? _sendingPaymentId;
 
   bool isLoading = true;
   String? errorMessage;
@@ -99,6 +111,9 @@ class _DendaScreenState extends State<DendaScreen> {
         };
       }).toList();
 
+      // Status "menunggu konfirmasi" dibaca dari notifikasi pembayaran.
+      await _loadPendingPayments(fineData);
+
       if (!mounted) return;
 
       setState(() {
@@ -114,6 +129,100 @@ class _DendaScreenState extends State<DendaScreen> {
         errorMessage = e.toString();
       });
     }
+  }
+
+  // =====================================================
+  // STATUS PEMBAYARAN DARI NOTIFIKASI
+  // =====================================================
+
+  String _shortId(dynamic id) {
+    final text = id?.toString() ?? '';
+    return text.length > 8 ? text.substring(0, 8) : text;
+  }
+
+  Future<void> _loadPendingPayments(
+    List<Map<String, dynamic>> fineData,
+  ) async {
+    if (fineData.isEmpty) return;
+
+    try {
+      final rows = await supabase
+          .from('notifications')
+          .select('message')
+          .eq('type', 'pembayaran_denda')
+          .order('created_at', ascending: false)
+          .limit(200);
+
+      for (final row in rows) {
+        final message = row['message']?.toString() ?? '';
+        for (final item in fineData) {
+          final id = item['id']?.toString();
+          if (id == null) continue;
+          // Notifikasi memakai id pendek agar mudah dicocokkan.
+          if (message.contains(_shortId(id))) {
+            _pendingPaymentIds.add(id);
+          }
+        }
+      }
+    } catch (e) {
+      // Jika notifikasi tidak dapat dibaca, status lokal tetap dipakai.
+      debugPrint('LOAD PEMBAYARAN ERROR: $e');
+    }
+  }
+
+  Future<void> _sendPaymentProof(
+    Map<String, dynamic> item,
+  ) async {
+    final borrowingId = item['id']?.toString();
+    if (borrowingId == null || _sendingPaymentId != null) return;
+
+    setState(() {
+      _sendingPaymentId = borrowingId;
+    });
+
+    final amount = _toInt(item['fine_amount']).toDouble();
+    final reference =
+        'QRIS-$borrowingId-${DateTime.now().millisecondsSinceEpoch}';
+
+    try {
+      await NotificationService.notifyPaymentPending(
+        borrowingId: borrowingId,
+        amount: amount,
+        reference: reference,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _pendingPaymentIds.add(borrowingId);
+        _sendingPaymentId = null;
+      });
+
+      _showMessage(
+        'Bukti pembayaran dikirim. Menunggu konfirmasi admin.',
+      );
+      await loadFines();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _sendingPaymentId = null;
+      });
+      _showMessage('Gagal mengirim bukti pembayaran: $e');
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: navy,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   // =====================================================
@@ -134,6 +243,18 @@ class _DendaScreenState extends State<DendaScreen> {
 
   bool _isPaid(Map<String, dynamic> item) {
     return item['fine_paid'] == true;
+  }
+
+  bool _isPending(Map<String, dynamic> item) {
+    final id = item['id']?.toString();
+    return id != null && _pendingPaymentIds.contains(id);
+  }
+
+  /// Status tunggal yang dipakai badge dan aksi pembayaran.
+  String _paymentStatus(Map<String, dynamic> item) {
+    if (_isPaid(item)) return 'Lunas';
+    if (_isPending(item)) return 'Menunggu konfirmasi';
+    return 'Belum Bayar';
   }
 
   List<Map<String, dynamic>> get unpaidFines {
@@ -348,6 +469,8 @@ class _DendaScreenState extends State<DendaScreen> {
         padding: const EdgeInsets.fromLTRB(19, 22, 19, 30),
         children: [
           _buildTotalCard(),
+          const SizedBox(height: 20),
+          _buildQrisCard(),
           const SizedBox(height: 27),
           _buildTabs(),
           const SizedBox(height: 17),
@@ -375,7 +498,7 @@ class _DendaScreenState extends State<DendaScreen> {
         borderRadius: BorderRadius.circular(17),
         boxShadow: [
           BoxShadow(
-            color: navy.withOpacity(0.07),
+            color: navy.withValues(alpha: 0.07),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -390,7 +513,7 @@ class _DendaScreenState extends State<DendaScreen> {
                 width: 35,
                 height: 35,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.55),
+                  color: Colors.white.withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -460,7 +583,7 @@ class _DendaScreenState extends State<DendaScreen> {
           const SizedBox(height: 14),
           Container(
             height: 1,
-            color: navy.withOpacity(0.12),
+            color: navy.withValues(alpha: 0.12),
           ),
           const SizedBox(height: 11),
           const Row(
@@ -474,9 +597,9 @@ class _DendaScreenState extends State<DendaScreen> {
               SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  'Pembayaran denda dapat dilakukan melalui '
-                  'kasir perpustakaan. Status pembayaran akan '
-                  'diperbarui setelah dikonfirmasi petugas.',
+                  'Bayar melalui QRIS di bawah, lalu kirim bukti '
+                  'pembayaran. Status denda baru lunas setelah '
+                  'dikonfirmasi petugas.',
                   style: TextStyle(
                     color: navy,
                     fontSize: 10,
@@ -485,6 +608,98 @@ class _DendaScreenState extends State<DendaScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // PEMBAYARAN QRIS
+  // =====================================================
+
+  Widget _buildQrisCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: navy.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.qr_code_scanner_rounded,
+                color: navy,
+                size: 20,
+              ),
+              SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  'Bayar Denda dengan QRIS',
+                  style: TextStyle(
+                    color: navy,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: QrImageView(
+              data: qrisPayload,
+              size: 160,
+              backgroundColor: AppColors.white,
+              eyeStyle: const QrEyeStyle(
+                eyeShape: QrEyeShape.square,
+                color: navy,
+              ),
+              dataModuleStyle: const QrDataModuleStyle(
+                dataModuleShape: QrDataModuleShape.square,
+                color: navy,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Cara pembayaran:',
+            style: TextStyle(
+              color: navy,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 7),
+          const Text(
+            '1. Buka aplikasi pembayaran atau e-wallet kamu.\n'
+            '2. Scan QRIS di atas dan masukkan nominal sesuai tagihan.\n'
+            '3. Tekan "Saya sudah bayar / Kirim bukti" pada denda yang '
+            'dimaksud.\n'
+            '4. Status akan berubah setelah admin memverifikasi bukti.',
+            style: TextStyle(
+              color: muted,
+              fontSize: 10.5,
+              height: 1.6,
+            ),
           ),
         ],
       ),
@@ -562,7 +777,7 @@ class _DendaScreenState extends State<DendaScreen> {
               ),
               decoration: BoxDecoration(
                 color: active
-                    ? Colors.white.withOpacity(0.17)
+                    ? Colors.white.withValues(alpha: 0.17)
                     : cream,
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -627,10 +842,11 @@ class _DendaScreenState extends State<DendaScreen> {
 
     final title = (book?['title'] ?? 'Judul tidak tersedia').toString();
     final author = (book?['author'] ?? 'Penulis tidak tersedia').toString();
-    final cover = (book?['cover_url'] ?? '').toString();
+    final cover = (book?['cover_url'] ?? book?['cover'] ?? '').toString();
 
     final amount = _toInt(item['fine_amount']);
     final paid = _isPaid(item);
+    final status = _paymentStatus(item);
     final lateDays = _lateDays(item);
 
     return Padding(
@@ -661,7 +877,7 @@ class _DendaScreenState extends State<DendaScreen> {
                       ),
                     ),
                     const SizedBox(width: 5),
-                    _buildStatus(paid),
+                    _buildStatus(status),
                   ],
                 ),
                 const SizedBox(height: 3),
@@ -697,6 +913,10 @@ class _DendaScreenState extends State<DendaScreen> {
                     _formatDate(item['fine_paid_at']),
                   ),
                 ],
+                if (!paid) ...[
+                  const SizedBox(height: 11),
+                  _buildPaymentAction(item, status),
+                ],
               ],
             ),
           ),
@@ -706,31 +926,11 @@ class _DendaScreenState extends State<DendaScreen> {
   }
 
   Widget _buildCover(String url) {
-    return Container(
+    return BookCover(
+      imageUrl: url,
       width: 69,
       height: 99,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: cream,
-        borderRadius: BorderRadius.circular(7),
-      ),
-      child: url.isNotEmpty
-          ? Image.network(
-              url,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _coverFallback(),
-            )
-          : _coverFallback(),
-    );
-  }
-
-  Widget _coverFallback() {
-    return const Center(
-      child: Icon(
-        Icons.menu_book_rounded,
-        color: navy,
-        size: 28,
-      ),
+      radius: 7,
     );
   }
 
@@ -774,26 +974,119 @@ class _DendaScreenState extends State<DendaScreen> {
     );
   }
 
-  Widget _buildStatus(bool paid) {
+  Widget _buildStatus(String status) {
+    final paid = status == 'Lunas';
+    final pending = status == 'Menunggu konfirmasi';
+
+    final background = paid
+        ? const Color(0xFFDDF1E4)
+        : pending
+            ? const Color(0xFFFFF0C9)
+            : const Color(0xFFFFE1E1);
+    final foreground = paid
+        ? const Color(0xFF267346)
+        : pending
+            ? const Color(0xFF8A6415)
+            : const Color(0xFFB33C3C);
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: 7,
         vertical: 4,
       ),
       decoration: BoxDecoration(
-        color: paid
-            ? const Color(0xFFDDF1E4)
-            : const Color(0xFFFFE1E1),
+        color: background,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        paid ? 'Lunas' : 'Belum Bayar',
+        status,
         style: TextStyle(
-          color: paid
-              ? const Color(0xFF267346)
-              : const Color(0xFFB33C3C),
+          color: foreground,
           fontSize: 8,
           fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentAction(
+    Map<String, dynamic> item,
+    String status,
+  ) {
+    if (status == 'Menunggu konfirmasi') {
+      return Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 9,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3D6),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.hourglass_top_rounded,
+              color: Color(0xFF8A6415),
+              size: 14,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Menunggu konfirmasi admin. Status denda akan diperbarui '
+                'setelah bukti pembayaran diverifikasi petugas.',
+                style: const TextStyle(
+                  color: Color(0xFF8A6415),
+                  fontSize: 9.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final sending =
+        _sendingPaymentId == item['id']?.toString();
+
+    return SizedBox(
+      width: double.infinity,
+      height: 34,
+      child: OutlinedButton.icon(
+        onPressed: sending ? null : () => _sendPaymentProof(item),
+        icon: sending
+            ? const SizedBox(
+                width: 13,
+                height: 13,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: navy,
+                ),
+              )
+            : const Icon(
+                Icons.upload_file_outlined,
+                color: navy,
+                size: 14,
+              ),
+        label: Text(
+          sending
+              ? 'Mengirim bukti...'
+              : 'Saya sudah bayar / Kirim bukti',
+          style: const TextStyle(
+            color: navy,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: navy, width: 1.1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
         ),
       ),
     );

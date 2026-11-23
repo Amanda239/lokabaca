@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../widgets/book_cover.dart';
 import 'user_bottom_navigation.dart';
 import 'dashboard_screen.dart';
 import 'searchpage_screen.dart';
@@ -28,6 +29,9 @@ class _CollectionScreenState extends State<CollectionScreen> {
   static const int booksPerPage = 10;
 
   String searchQuery = '';
+  String selectedStatus = 'Semua';
+
+  static const statusFilters = ['Semua', 'Dipinjam', 'Terlambat', 'Selesai'];
 
   List<Map<String, dynamic>> books = [];
 
@@ -153,21 +157,40 @@ class _CollectionScreenState extends State<CollectionScreen> {
     }
   }
 
-  // FILTER PENCARIAN
+  // FILTER PENCARIAN + STATUS
   List<Map<String, dynamic>> get filteredBooks {
     final query = searchQuery.trim().toLowerCase();
 
-    if (query.isEmpty) return books;
-
     return books.where((book) {
-      final title =
-          book['title'].toString().toLowerCase();
-
-      final author =
-          book['author'].toString().toLowerCase();
-
-      return title.contains(query) || author.contains(query);
+      final matchesSearch = query.isEmpty ||
+          book['title'].toString().toLowerCase().contains(query) ||
+          book['author'].toString().toLowerCase().contains(query);
+      return matchesSearch && _matchesStatus(book);
     }).toList();
+  }
+
+  bool _matchesStatus(Map<String, dynamic> book) {
+    if (selectedStatus == 'Semua') return true;
+
+    final status = book['status']?.toString().toLowerCase() ?? '';
+    final returned = book['returned_at'] != null &&
+        book['returned_at'].toString().isNotEmpty;
+
+    switch (selectedStatus) {
+      case 'Dipinjam':
+        return status == 'dipinjam' || status == 'menunggu';
+      case 'Terlambat':
+        if (status == 'terlambat') return true;
+        if (returned) return false;
+        final due = DateTime.tryParse(book['due_date']?.toString() ?? '');
+        return due != null && due.isBefore(DateTime.now());
+      case 'Selesai':
+        return returned ||
+            status == 'selesai' ||
+            status == 'dikembalikan';
+      default:
+        return true;
+    }
   }
 
   // TOTAL HALAMAN
@@ -323,9 +346,11 @@ class _CollectionScreenState extends State<CollectionScreen> {
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
                         _buildHeader(),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 24),
                         _buildSearchField(),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 12),
+                        _buildStatusFilter(),
+                        const SizedBox(height: 16),
                       ]),
                     ),
                   ),
@@ -486,7 +511,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
         decoration: InputDecoration(
           hintText: 'Cari di koleksi kamu...',
           hintStyle: TextStyle(
-            color: AppColors.grey.withOpacity(0.9),
+            color: AppColors.grey.withValues(alpha: 0.9),
             fontSize: 11,
           ),
           prefixIcon: const Icon(
@@ -519,6 +544,44 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
   }
 
+  // FILTER STATUS PEMINJAMAN
+  Widget _buildStatusFilter() {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: statusFilters.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final label = statusFilters[index];
+          final active = selectedStatus == label;
+
+          return ChoiceChip(
+            label: Text(
+              label,
+              style: TextStyle(
+                color: active ? AppColors.white : AppColors.navy,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            selected: active,
+            selectedColor: AppColors.navy,
+            backgroundColor: AppColors.white,
+            side: BorderSide(color: AppColors.border),
+            showCheckmark: false,
+            onSelected: (_) {
+              setState(() {
+                selectedStatus = label;
+                currentPage = 0;
+              });
+            },
+          );
+        },
+      ),
+    );
+  }
+
   // BOOK CARD
   Widget _buildBookCard(Map<String, dynamic> book) {
     return LayoutBuilder(
@@ -543,7 +606,12 @@ class _CollectionScreenState extends State<CollectionScreen> {
                 child: SizedBox(
                   width: coverWidth,
                   height: 106,
-                  child: _buildBookCover(book),
+                  child: BookCover(
+                    imageUrl: book['cover_url'] ?? book['cover'],
+                    width: coverWidth,
+                    height: 106,
+                    radius: 9,
+                  ),
                 ),
               ),
               const SizedBox(width: 11),
@@ -597,7 +665,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                         ),
                         decoration: BoxDecoration(
                           color: _statusColor(status)
-                              .withOpacity(0.16),
+                              .withValues(alpha: 0.16),
                           borderRadius: BorderRadius.circular(5),
                         ),
                         child: Text(
@@ -630,37 +698,6 @@ class _CollectionScreenState extends State<CollectionScreen> {
     );
   }
 
-  // BOOK COVER DARI SUPABASE STORAGE / URL
-  Widget _buildBookCover(Map<String, dynamic> book) {
-    final coverUrl = book['cover_url']?.toString() ?? '';
-
-    if (coverUrl.isEmpty) {
-      return _buildCoverPlaceholder();
-    }
-
-    return Image.network(
-      coverUrl,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      errorBuilder: (context, error, stackTrace) {
-        return _buildCoverPlaceholder();
-      },
-    );
-  }
-
-  Widget _buildCoverPlaceholder() {
-    return Container(
-      color: AppColors.cream,
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.menu_book_rounded,
-        color: AppColors.navy,
-        size: 31,
-      ),
-    );
-  }
-
   // PAGINATION
   Widget _buildPagination() {
     return Column(
@@ -668,7 +705,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
         Text(
           'Halaman ${currentPage + 1} dari $totalPages',
           style: TextStyle(
-            color: AppColors.white.withOpacity(0.8),
+            color: AppColors.white.withValues(alpha: 0.8),
             fontSize: 10,
           ),
         ),
@@ -685,7 +722,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                 size: 25,
               ),
               color: AppColors.white,
-              disabledColor: AppColors.grey.withOpacity(0.4),
+              disabledColor: AppColors.grey.withValues(alpha: 0.4),
             ),
             const SizedBox(width: 8),
             ...List.generate(totalPages, (index) {
@@ -731,7 +768,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                 size: 25,
               ),
               color: AppColors.white,
-              disabledColor: AppColors.grey.withOpacity(0.4),
+              disabledColor: AppColors.grey.withValues(alpha: 0.4),
             ),
           ],
         ),
@@ -808,7 +845,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
               errorMessage ?? 'Terjadi kesalahan.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: AppColors.white.withOpacity(0.75),
+                color: AppColors.white.withValues(alpha: 0.75),
                 fontSize: 10,
               ),
             ),

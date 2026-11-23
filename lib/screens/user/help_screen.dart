@@ -1,5 +1,8 @@
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/constants/app_colors.dart';
 
 class HelpScreen extends StatefulWidget {
   const HelpScreen({super.key});
@@ -13,22 +16,63 @@ class _HelpScreenState extends State<HelpScreen> {
   // COLORS
   // ==========================================
 
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
   static const Color gold = Color(0xFF8A6800);
-  static const Color textColor = Color(0xFF282828);
+  static const Color textColor = AppColors.text;
   static const Color mutedText = Color(0xFF65758A);
 
-  // FAQ yang ditampilkan
+  static const String whatsappNumber = '081330662135';
+
+  // FAQ mengikuti kebijakan peminjaman LokaBaca yang berlaku.
   final List<Map<String, String>> faqList = [
     {
-      'question': 'Berapa lama batas waktu peminjaman buku fisik?',
+      'question': 'Bagaimana cara meminjam buku di LokaBaca?',
       'answer':
-          'Maksimal peminjaman adalah 30 hari dengan kuota 2 buku. '
-          'Pengguna dapat memperpanjang 1x (7 hari tambahan) melalui '
-          'aplikasi selama buku tidak sedang direservasi antrean pembaca lain.',
+          'Cari buku melalui menu Jelajah atau Pencarian, buka detail buku, '
+          'lalu tekan "Ajukan Peminjaman". Pilih durasi 3 hari dan kirim '
+          'pengajuan. Maksimal 3 buku dapat dipinjam sekaligus. Pengajuan '
+          'akan diproses oleh admin sebelum buku dapat diambil.',
       'tip':
-          'Perpanjang H-2 sebelum jatuh tempo via menu Rak Saya.',
+          'Cek status pengajuan melalui menu Riwayat Peminjaman.',
+    },
+    {
+      'question': 'Berapa lama masa pinjam dan boleh diperpanjang?',
+      'answer':
+          'Masa peminjaman standar adalah 3 hari per buku. Perpanjangan '
+          'dapat dilakukan 1 kali untuk tambahan 3 hari, melalui aplikasi '
+          'sebelum batas jatuh tempo.',
+      'tip':
+          'Perpanjang lebih awal agar tidak dikenakan denda keterlambatan.',
+    },
+    {
+      'question': 'Bagaimana perhitungan denda keterlambatan?',
+      'answer':
+          'Denda dikenakan Rp1.000 per hari untuk setiap buku yang telat '
+          'dikembalikan. Tagihan muncul otomatis di menu "Denda Saya". '
+          'Bayar melalui QRIS, lalu kirim bukti pembayaran untuk diverifikasi '
+          'admin. Status denda baru berubah lunas setelah konfirmasi admin.',
+      'tip':
+          'Simpan bukti transfer sampai status denda berubah menjadi Lunas.',
+    },
+    {
+      'question': 'Bagaimana cara mengembalikan buku?',
+      'answer':
+          'Kembalikan buku fisik ke petugas perpustakaan sebelum jatuh tempo. '
+          'Petugas akan mengonfirmasi pengembalian di aplikasi sehingga status '
+          'peminjaman berubah menjadi Selesai.',
+      'tip':
+          'Pastikan kondisi buku tetap baik saat dikembalikan.',
+    },
+    {
+      'question': 'Apa bedanya Koleksi dan Wishlist?',
+      'answer':
+          'Wishlist berisi buku yang ingin kamu baca (tombol hati) dan belum '
+          'tentu dipinjam. Koleksi berisi buku yang sedang atau pernah kamu '
+          'pinjam dari hasil pengajuan peminjaman yang disetujui.',
+      'tip':
+          'Gunakan hati untuk wishlist dan tombol "Ajukan Peminjaman" '
+          'untuk menambah koleksi.',
     },
   ];
 
@@ -36,47 +80,41 @@ class _HelpScreenState extends State<HelpScreen> {
   // WHATSAPP SERVICE
   // ==========================================
 
-  void _contactWhatsApp() {
-    // Frontend sementara.
-    // Nomor WhatsApp dapat dihubungkan setelah nomor resmi tersedia.
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: const Text(
-            'Layanan WhatsApp',
-            style: TextStyle(
-              color: navy,
-              fontWeight: FontWeight.w800,
-              fontSize: 17,
-            ),
-          ),
-          content: const Text(
-            'Hubungi layanan bantuan LokaBaca melalui WhatsApp pada '
-            'jam operasional pukul 08.00 - 20.00.',
-            style: TextStyle(
-              color: textColor,
-              fontSize: 13,
-              height: 1.5,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text(
-                'Tutup',
-                style: TextStyle(color: navy),
-              ),
-            ),
-          ],
-        );
-      },
+  Future<void> _contactWhatsApp() async {
+    final greeting = Uri.encodeComponent(
+      'Halo LokaBaca, saya membutuhkan bantuan terkait peminjaman buku.',
     );
+    // Format WhatsApp internasional: 0813... -> 62813...
+    final internationalNumber =
+        whatsappNumber.replaceFirst('0', '62');
+    final url = Uri.parse(
+      'https://wa.me/$internationalNumber?text=$greeting',
+    );
+
+    try {
+      final launched = await launchUrl(
+        url,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tidak dapat membuka WhatsApp.'),
+            backgroundColor: navy,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tidak dapat membuka WhatsApp.'),
+          backgroundColor: navy,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   // ==========================================
@@ -135,7 +173,7 @@ class _HelpScreenState extends State<HelpScreen> {
           borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.20),
+              color: Colors.black.withValues(alpha: 0.20),
               blurRadius: 6,
               offset: const Offset(2, 3),
             ),
@@ -175,7 +213,7 @@ class _HelpScreenState extends State<HelpScreen> {
                   ),
                   SizedBox(height: 4),
                   Text(
-                    '+62 811-LOKABACA (08.00 - 20.00)',
+                    '081330662135 (08.00 - 20.00)',
                     style: TextStyle(
                       color: mutedText,
                       fontSize: 11,
@@ -236,7 +274,7 @@ class _HelpScreenState extends State<HelpScreen> {
         borderRadius: BorderRadius.circular(17),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.22),
+            color: Colors.black.withValues(alpha: 0.22),
             blurRadius: 6,
             offset: const Offset(2, 3),
           ),

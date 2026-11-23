@@ -1,12 +1,14 @@
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/services/auth_service.dart';
 import '../auth/login_screen.dart';
 import 'edit_profile_screen.dart';
 import 'help_screen.dart';
 import 'kebijakan_peminjaman_screen.dart';
 import 'change_password_screen.dart';
+import 'notifikasi_screen.dart';
 import 'tentang_lokabaca_screen.dart';
 
 class PengaturanAplikasiScreen extends StatefulWidget {
@@ -24,14 +26,10 @@ class PengaturanAplikasiScreen extends StatefulWidget {
 
 class _PengaturanAplikasiScreenState
     extends State<PengaturanAplikasiScreen> {
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color red = Color(0xFFFF4438);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color red = Color(0xFFD64545);
 
-  final SupabaseClient supabase =
-      Supabase.instance.client;
-
-  bool notificationEnabled = true;
   bool isLoggingOut = false;
 
   // PESAN
@@ -63,13 +61,23 @@ class _PengaturanAplikasiScreenState
 
   // GANTI PASSWORD
   void _changePassword() {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => const ChangePasswordScreen(),
-    ),
-  );
-}
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ChangePasswordScreen(),
+      ),
+    );
+  }
+
+  // NOTIFIKASI
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const NotifikasiUserScreen(),
+      ),
+    );
+  }
 
   // KEBIJAKAN PEMINJAMAN
   void _openPolicy() {
@@ -94,13 +102,13 @@ class _PengaturanAplikasiScreenState
 
   // TENTANG APLIKASI
   void _showAbout() {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => const TentangLokaBacaScreen(),
-    ),
-  );
-}
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const TentangLokaBacaScreen(),
+      ),
+    );
+  }
 
   // LOGOUT
   Future<void> _logout() async {
@@ -148,7 +156,7 @@ class _PengaturanAplikasiScreenState
     });
 
     try {
-      await supabase.auth.signOut();
+      await AuthService.signOut();
 
       if (!mounted) return;
 
@@ -247,21 +255,10 @@ class _PengaturanAplikasiScreenState
 
                     const SizedBox(height: 20),
 
-                    _switchButton(
+                    _menuButton(
                       icon: Icons.notifications_none_rounded,
                       title: 'Notifikasi',
-                      value: notificationEnabled,
-                      onChanged: (value) {
-                        setState(() {
-                          notificationEnabled = value;
-                        });
-
-                        _showMessage(
-                          value
-                              ? 'Notifikasi diaktifkan.'
-                              : 'Notifikasi dinonaktifkan.',
-                        );
-                      },
+                      onTap: _openNotifications,
                     ),
 
                     const SizedBox(height: 12),
@@ -404,59 +401,6 @@ class _PengaturanAplikasiScreenState
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // MENU DENGAN SWITCH
-  Widget _switchButton({
-    required IconData icon,
-    required String title,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: Material(
-        color: navy,
-        elevation: 4,
-        borderRadius: BorderRadius.circular(11),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 17,
-          ),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                color: cream,
-                size: 22,
-              ),
-              const SizedBox(width: 22),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: cream,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Switch(
-                value: value,
-                onChanged: onChanged,
-                activeColor: cream,
-                activeTrackColor: const Color(0xFF8296A9),
-                inactiveThumbColor: cream,
-                inactiveTrackColor: Colors.grey,
-                materialTapTargetSize:
-                    MaterialTapTargetSize.shrinkWrap,
-              ),
-            ],
           ),
         ),
       ),

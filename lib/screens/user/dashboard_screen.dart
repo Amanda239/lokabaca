@@ -1,15 +1,22 @@
-
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
-import 'user_bottom_navigation.dart';
+import '../../core/config/supabase_config.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/book_repository.dart';
+import '../../core/services/notification_service.dart';
+import '../../widgets/book_cover.dart';
+import '../../widgets/user_avatar.dart';
+import 'all_books_screen.dart';
 import 'collection_screen.dart';
-import 'searchpage_screen.dart';
+import 'denda_screen.dart';
+import 'detail_buku_screen.dart';
+import 'notifikasi_screen.dart';
 import 'peminjaman_screen.dart';
 import 'profile_screen.dart';
-import 'detail_buku_screen.dart';
+import 'searchpage_screen.dart';
+import 'user_bottom_navigation.dart';
 import 'wishlist_screen.dart';
-import 'denda_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -18,75 +25,106 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   int selectedNav = 0;
 
-  final List<Map<String, dynamic>> books = [
-    {
-      'title': 'Hujan',
-      'author': 'Tere Liye',
-      'category': 'Novel',
-      'rating': '4.8',
-      'cover': 'assets/images/hujan.jpeg',
-      'color': const Color(0xFF75C9E0),
-      'icon': Icons.water_drop_rounded,
-      'reviews': '8.5k ulasan',
-      'tags': ['Romansa', 'Drama', 'Fiksi'],
-      'synopsis':
-          'Novel Hujan karya Tere Liye menceritakan kisah Lail dan Esok yang bertemu di tengah bencana alam dahsyat. Di tengah kehilangan, persahabatan, cinta, dan kenangan, Lail harus menghadapi masa lalu serta menentukan apa yang ingin ia lupakan.',
-      'publisher': 'Gramedia Pustaka Utama',
-      'year': '2016',
-      'pages': '320 halaman',
-    },
-    {
-      'title': 'Cake Shop',
-      'author': 'Nana S.',
-      'category': 'Romansa',
-      'rating': '4.7',
-      'cover': 'assets/images/cakeshop.jpeg',
-      'color': const Color(0xFFE9D0D0),
-      'icon': Icons.cake_rounded,
-      'reviews': '2.1k ulasan',
-      'tags': ['Romansa', 'Drama', 'Rekomendasi'],
-      'synopsis':
-          'Sebuah cerita tentang kehidupan, pertemuan, dan kisah cinta yang tumbuh di sebuah toko kue. Di balik aroma manis dan berbagai hidangan, tersimpan cerita tentang impian, persahabatan, dan kesempatan untuk menemukan kebahagiaan.',
-      'publisher': 'Penerbit Nana',
-      'year': '2023',
-      'pages': '250 halaman',
-    },
-    {
-      'title': 'Bumi',
-      'author': 'Tere Liye',
-      'category': 'Fantasi',
-      'rating': '4.7',
-      'cover': 'assets/images/bumi.jpeg',
-      'color': const Color(0xFF244C38),
-      'icon': Icons.public_rounded,
-      'reviews': '9.2k ulasan',
-      'tags': ['Fantasi', 'Petualangan', 'Fiksi'],
-      'synopsis':
-          'Novel Bumi karya Tere Liye menceritakan petualangan Raib, seorang gadis yang memiliki kemampuan menghilang. Bersama kedua sahabatnya, Seli dan Ali, ia menjelajahi dunia paralel dan menghadapi berbagai petualangan penuh misteri.',
-      'publisher': 'Gramedia Pustaka Utama',
-      'year': '2014',
-      'pages': '440 halaman',
-    },
-    {
-      'title': 'Laut Bercerita',
-      'author': 'Leila S. Chudori',
-      'category': 'Fiksi',
-      'rating': '4.9',
-      'cover': 'assets/images/lautbercerita.jpeg',
-      'color': const Color(0xFF356B82),
-      'icon': Icons.waves_rounded,
-      'reviews': '12.4k ulasan',
-      'tags': ['Fiksi', 'Sastra', 'Rekomendasi'],
-      'synopsis':
-          'Novel Laut Bercerita karya Leila S. Chudori mengisahkan tentang kekejaman, penculikan, dan penghilangan paksa aktivis mahasiswa pada masa akhir Orde Baru tahun 1998.',
-      'publisher': 'Kepustakaan Populer Gramedia',
-      'year': '2017',
-      'pages': '379 halaman',
-    },
-  ];
+  List<Map<String, dynamic>> popularBooks = [];
+  int unreadCount = 0;
+  String? avatarUrl;
+  bool isLoadingBooks = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadDashboard();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshNotifications();
+      _loadProfileAvatar();
+    }
+  }
+
+  Future<void> _refreshNotifications() async {
+    await NotificationService.runChecks();
+    await _loadUnreadCount();
+  }
+
+  // DATA ASLI SUPABASE
+  Future<void> _loadDashboard() async {
+    if (mounted) setState(() => isLoadingBooks = true);
+
+    try {
+      final rows = await BookRepository.fetchPage(page: 0);
+      if (mounted) {
+        setState(() {
+          popularBooks = rows;
+          isLoadingBooks = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          popularBooks = const [];
+          isLoadingBooks = false;
+        });
+      }
+    }
+
+    await _loadProfileAvatar();
+    await _refreshNotifications();
+  }
+
+  /// Foto profil di dashboard memakai data yang sama dengan halaman profil.
+  Future<void> _loadProfileAvatar() async {
+    final profile = await AuthService.currentProfile();
+    final url = profile?['avatar_url']?.toString().trim();
+    if (!mounted) return;
+    setState(() {
+      avatarUrl = (url == null || url.isEmpty) ? null : url;
+    });
+  }
+
+  Future<void> _loadUnreadCount() async {
+    final userId = AuthService.currentUserId;
+    if (userId == null) {
+      if (mounted) setState(() => unreadCount = 0);
+      return;
+    }
+
+    try {
+      final rows = await SupabaseConfig.client
+          .from('notifications')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('is_read', false);
+      if (mounted) setState(() => unreadCount = rows.length);
+    } catch (_) {
+      // Biarkan angka terakhir bila gagal memuat.
+    }
+  }
+
+  Map<String, dynamic> _prepareBookForDetail(Map<String, dynamic> book) {
+    return {
+      ...book,
+      'cover': book['cover_url'] ?? book['cover'] ?? '',
+      'synopsis': book['description'] ?? book['synopsis'] ?? '',
+      'year': book['published_year']?.toString() ??
+          book['year']?.toString() ??
+          '-',
+      'pages': book['pages']?.toString() ?? '-',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,40 +134,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-            final horizontalPadding =
-                width >= 600 ? 28.0 : 18.0;
+            final horizontalPadding = width >= 600 ? 28.0 : 18.0;
 
-            return CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                    horizontalPadding,
-                    18,
-                    horizontalPadding,
-                    20,
-                  ),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildHeader(),
-                      const SizedBox(height: 17),
-                      _buildSearchBar(),
-                      const SizedBox(height: 25),
-                      _buildBanner(width),
-                      const SizedBox(height: 17),
-                      _buildShortcuts(),
-                      const SizedBox(height: 28),
-                      _buildSectionHeader(
-                        'Buku Populer',
-                        'Lihat Semua',
-                        onTap: _openSearch,
-                      ),
-                      const SizedBox(height: 15),
-                      _buildPopularBooks(width),
-                    ]),
-                  ),
+            return RefreshIndicator(
+              color: AppColors.navy,
+              onRefresh: _loadDashboard,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
                 ),
-              ],
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      18,
+                      horizontalPadding,
+                      20,
+                    ),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _buildHeader(),
+                        const SizedBox(height: 17),
+                        _buildSearchBar(),
+                        const SizedBox(height: 25),
+                        _buildBanner(width),
+                        const SizedBox(height: 17),
+                        _buildShortcuts(),
+                        const SizedBox(height: 28),
+                        _buildSectionHeader(
+                          'Buku Populer',
+                          'Lihat Semua',
+                          onTap: _openAllBooks,
+                        ),
+                        const SizedBox(height: 15),
+                        _buildPopularBooks(width),
+                      ]),
+                    ),
+                  ),
+                ],
+              ),
             );
           },
         ),
@@ -173,32 +216,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         const Spacer(),
-        IconButton(
-          onPressed: () => _showMessage(
-            'Halaman notifikasi akan dibuat berikutnya.',
-          ),
-          icon: const Icon(
-            Icons.notifications_none_rounded,
-            color: AppColors.navy,
-            size: 23,
-          ),
-          visualDensity: VisualDensity.compact,
-        ),
-        IconButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const ProfileScreen(),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            IconButton(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const NotifikasiUserScreen(),
+                  ),
+                );
+                await _refreshNotifications();
+              },
+              icon: const Icon(
+                Icons.notifications_none_rounded,
+                color: AppColors.navy,
+                size: 23,
               ),
-            );
-          },
-          icon: const Icon(
-            Icons.account_circle_rounded,
-            color: AppColors.navy,
-            size: 23,
+              visualDensity: VisualDensity.compact,
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: 4,
+                top: 4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 17,
+                    minHeight: 17,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.yellow,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: AppColors.white, width: 1),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        Tooltip(
+          message: 'Profil',
+          child: InkWell(
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ProfileScreen(),
+                ),
+              );
+              await _loadProfileAvatar();
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: UserAvatar(
+                imageUrl: avatarUrl,
+                size: 31,
+                iconSize: 20,
+              ),
+            ),
           ),
-          visualDensity: VisualDensity.compact,
         ),
       ],
     );
@@ -208,23 +298,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildSearchBar() {
     return Material(
-      color: const Color(0xFFF8F4EC),
+      color: AppColors.input,
       elevation: 2,
-      shadowColor: const Color(0xFF2F4156).withOpacity(0.12),
+      shadowColor: AppColors.navy.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
         borderRadius: BorderRadius.circular(13),
         onTap: _openSearch,
         child: Container(
           height: 40,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(13),
-            border: Border.all(
-              color: const Color(0xFFE3DED4),
-            ),
+            border: Border.all(color: AppColors.border),
           ),
           child: Row(
             children: [
@@ -240,7 +326,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AppColors.grey.withOpacity(0.95),
+                    color: AppColors.grey.withValues(alpha: 0.95),
                     fontSize: 10,
                   ),
                 ),
@@ -255,18 +341,101 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // BANNER
 
   Widget _buildBanner(double availableWidth) {
-    final bannerHeight =
-        (availableWidth * 0.47).clamp(105.0, 190.0);
+    final bannerHeight = (availableWidth * 0.47).clamp(112.0, 180.0);
 
-    return Container(
-      width: double.infinity,
-      height: bannerHeight,
-      decoration: BoxDecoration(
-        color: const Color(0xFFD8D8D8),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFFD0D0D0),
-          width: 0.5,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: double.infinity,
+        height: bannerHeight,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.navy,
+              AppColors.navy.withValues(alpha: 0.78),
+            ],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -32,
+              bottom: -48,
+              child: Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  color: AppColors.white.withValues(alpha: 0.06),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 15,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'SELAMAT DATANG DI LOKABACA',
+                          style: TextStyle(
+                            color: AppColors.yellow,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        const Text(
+                          'Perpustakaan digital untuk semua.',
+                          maxLines: 2,
+                          style: TextStyle(
+                            color: AppColors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Temukan, pinjam, dan baca buku favoritmu kapan saja.',
+                          maxLines: 2,
+                          style: TextStyle(
+                            color: AppColors.white.withValues(alpha: 0.82),
+                            fontSize: 10,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Opacity(
+                    opacity: 0.92,
+                    child: Image.asset(
+                      'assets/images/lokabaca.png',
+                      width: 76,
+                      height: 76,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.menu_book_rounded,
+                        color: AppColors.yellow,
+                        size: 52,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -276,22 +445,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildShortcuts() {
     final shortcuts = [
-      {
-        'label': 'Denda',
-        'icon': Icons.receipt_long_rounded,
-      },
-      {
-        'label': 'Wishlist',
-        'icon': Icons.favorite_border_rounded,
-      },
-      {
-        'label': 'Riwayat',
-        'icon': Icons.history_rounded,
-      },
-      {
-        'label': 'Profil',
-        'icon': Icons.person_outline_rounded,
-      },
+      {'label': 'Denda', 'icon': Icons.receipt_long_rounded},
+      {'label': 'Wishlist', 'icon': Icons.favorite_border_rounded},
+      {'label': 'Koleksi', 'icon': Icons.collections_bookmark_rounded},
+      {'label': 'Profil', 'icon': Icons.person_outline_rounded},
     ];
 
     return Row(
@@ -300,13 +457,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: InkWell(
             borderRadius: BorderRadius.circular(15),
             onTap: () {
-              final label = shortcut['label'] as String;
-
-              switch (label) {
+              switch (shortcut['label'] as String) {
                 case 'Denda':
                   _openFine();
                   break;
-
                 case 'Wishlist':
                   Navigator.push(
                     context,
@@ -315,11 +469,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   );
                   break;
-
-                case 'Riwayat':
-                  _openBorrowing();
+                case 'Koleksi':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CollectionScreen(),
+                    ),
+                  );
                   break;
-
                 case 'Profil':
                   Navigator.push(
                     context,
@@ -331,16 +488,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               }
             },
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: 5,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: 5),
               child: Column(
                 children: [
                   Container(
                     width: 48,
                     height: 48,
                     decoration: const BoxDecoration(
-                      color: Color(0xFFFAF5EB),
+                      color: AppColors.input,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -393,9 +548,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: onTap,
           borderRadius: BorderRadius.circular(6),
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
               children: [
                 Text(
@@ -422,27 +575,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // POPULAR BOOKS
 
   Widget _buildPopularBooks(double availableWidth) {
-    final cardWidth =
-        availableWidth < 370 ? 100.0 : 112.0;
+    final cardWidth = availableWidth < 370 ? 100.0 : 112.0;
+
+    if (isLoadingBooks) {
+      return const SizedBox(
+        height: 182,
+        child: Center(
+          child: CircularProgressIndicator(
+            color: AppColors.navy,
+            strokeWidth: 2,
+          ),
+        ),
+      );
+    }
+
+    if (popularBooks.isEmpty) {
+      return const SizedBox(
+        height: 182,
+        child: Center(
+          child: Text(
+            'Belum ada buku tersedia.',
+            style: TextStyle(color: AppColors.grey, fontSize: 11),
+          ),
+        ),
+      );
+    }
 
     return SizedBox(
-      height: 205,
+      height: 182,
       child: ListView.separated(
         clipBehavior: Clip.none,
         scrollDirection: Axis.horizontal,
-        itemCount: books.length,
-        separatorBuilder: (_, __) =>
-            const SizedBox(width: 14),
+        itemCount: popularBooks.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
         itemBuilder: (context, index) {
-          final book = books[index];
+          final book = popularBooks[index];
+          final rating = double.tryParse('${book['rating'] ?? 0}') ?? 0;
 
           return SizedBox(
             width: cardWidth,
             child: Material(
               color: AppColors.white,
-              elevation: 5,
-              shadowColor:
-                  const Color(0xFF2F4156).withOpacity(0.18),
+              elevation: 4,
+              shadowColor: AppColors.navy.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
@@ -451,7 +626,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => DetailBukuScreen(
-                        book: book,
+                        book: _prepareBookForDetail(book),
                       ),
                     ),
                   );
@@ -459,36 +634,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(7),
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius:
-                              BorderRadius.circular(8),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: Image.asset(
-                              book['cover'] as String,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) {
-                                return Container(
-                                  color: book['color'] as Color,
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                    book['icon'] as IconData,
-                                    color: AppColors.yellow,
-                                    size: 34,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
+                      BookCover(
+                        imageUrl: book['cover_url'] ?? book['cover'],
+                        width: cardWidth - 14,
+                        height: 108,
+                        radius: 8,
                       ),
                       const SizedBox(height: 7),
                       Text(
-                        book['title'] as String,
+                        book['title']?.toString() ?? 'Tanpa Judul',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -499,7 +655,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        book['author'] as String,
+                        book['author']?.toString() ?? '-',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -512,12 +668,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         children: [
                           const Icon(
                             Icons.star_rounded,
-                            color: Color(0xFFFFC83D),
-                            size: 17,
+                            color: AppColors.yellow,
+                            size: 15,
                           ),
                           const SizedBox(width: 3),
                           Text(
-                            book['rating'] as String,
+                            rating.toStringAsFixed(1),
                             style: const TextStyle(
                               color: AppColors.navy,
                               fontSize: 10,
@@ -546,21 +702,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     switch (index) {
       case 0:
-        destination = const DashboardScreen();
-        break;
-
+        return;
       case 1:
         destination = const SearchPageScreen();
         break;
-
       case 2:
         destination = const PeminjamanScreen();
         break;
-
       case 3:
         destination = const CollectionScreen();
         break;
-
       case 4:
         destination = const ProfileScreen();
         break;
@@ -570,9 +721,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => destination!,
-      ),
+      MaterialPageRoute(builder: (_) => destination!),
     );
   }
 
@@ -581,39 +730,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _openSearch() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const SearchPageScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const SearchPageScreen()),
     );
   }
 
-  void _openBorrowing() {
+  void _openAllBooks() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const PeminjamanScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const AllBooksScreen()),
     );
   }
 
   void _openFine() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const DendaScreen(),
-      ),
-    );
-  }
-
-  // MESSAGE
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.navy,
-      ),
+      MaterialPageRoute(builder: (_) => const DendaScreen()),
     );
   }
 }

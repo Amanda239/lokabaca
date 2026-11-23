@@ -501,7 +501,7 @@ class _UlasanBukuScreenState extends State<UlasanBukuScreen> {
                           label: Text(tag),
                           selected: selected,
                           selectedColor:
-                              AppColors.yellow.withOpacity(0.35),
+                              AppColors.yellow.withValues(alpha: 0.35),
                           onSelected: (value) {
                             setSheetState(() {
                               if (value) {
@@ -671,7 +671,7 @@ class _UlasanBukuScreenState extends State<UlasanBukuScreen> {
         border: Border.all(color: AppColors.navy),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 5,
             offset: const Offset(2, 4),
           ),

@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
 
@@ -13,8 +15,8 @@ class ChangePasswordScreen extends StatefulWidget {
 class _ChangePasswordScreenState
     extends State<ChangePasswordScreen> {
   // WARNA LOKABACA
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
   static const Color mutedText = Color(0xFF92929B);
 
   final _formKey = GlobalKey<FormState>();
@@ -87,7 +89,7 @@ class _ChangePasswordScreenState
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.20),
+            color: Colors.black.withValues(alpha: 0.20),
             blurRadius: 5,
             offset: const Offset(0, 2),
           ),
@@ -321,64 +323,34 @@ class _ChangePasswordScreenState
                       SizedBox(
                         width: double.infinity,
                         height: 225,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.menu_book_rounded,
-                                  color: Color(0xFF173C66),
-                                  size: 85,
-                                ),
-                                Positioned(
-                                  top: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(5),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF173C66),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.auto_stories_rounded,
-                                      color: Colors.white,
-                                      size: 27,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            RichText(
-                              text: const TextSpan(
-                                style: TextStyle(
-                                  fontSize: 27,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: -1,
-                                ),
+                        child: Center(
+                          child: Image.asset(
+                            'assets/images/lokabaca.png',
+                            width: 170,
+                            height: 170,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) {
+                              return const Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  TextSpan(
-                                    text: 'Loka',
-                                    style: TextStyle(
-                                      color: Color(0xFF173C66),
-                                    ),
+                                  Icon(
+                                    Icons.menu_book_rounded,
+                                    color: navy,
+                                    size: 85,
                                   ),
-                                  TextSpan(
-                                    text: 'Baca',
+                                  SizedBox(height: 6),
+                                  Text(
+                                    'LokaBaca',
                                     style: TextStyle(
-                                      color: Color(0xFFFFB72B),
+                                      color: navy,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w900,
                                     ),
                                   ),
                                 ],
-                              ),
-                            ),
-                            Container(
-                              width: 105,
-                              height: 2,
-                              color: const Color(0xFFFFB72B),
-                            ),
-                          ],
+                              );
+                            },
+                          ),
                         ),
                       ),
 
@@ -474,7 +446,7 @@ class _ChangePasswordScreenState
                             backgroundColor: navy,
                             foregroundColor: Colors.white,
                             disabledBackgroundColor:
-                                const Color(0xFF8793A0),
+                                AppColors.grey,
                             elevation: 3,
                             shadowColor: Colors.black38,
                             shape: RoundedRectangleBorder(

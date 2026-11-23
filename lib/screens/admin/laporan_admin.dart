@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/services/notification_service.dart';
+import '../../widgets/book_cover.dart';
 import 'admin_bottom_navigation.dart';
+import 'denda_admin_screen.dart';
 import 'kelola_buku.dart';
 import 'kelola_anggota.dart';
 import 'peminjaman_admin.dart';
-import 'pengaturan_admin_page.dart';
+import 'profile_admin.dart';
 
 class LaporanAdminScreen extends StatefulWidget {
   const LaporanAdminScreen({super.key});
@@ -20,14 +24,14 @@ class LaporanAdminScreen extends StatefulWidget {
 class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
   final supabase = Supabase.instance.client;
 
-  static const Color navy = Color(0xFF2E4057);
-  static const Color cream = Color(0xFFF8F4EA);
-  static const Color muted = Color(0xFF8993A1);
-  static const Color border = Color(0xFFE5E8ED);
-  static const Color red = Color(0xFFE84D5B);
+  static const Color navy = AppColors.navy;
+  static const Color cream = AppColors.cream;
+  static const Color muted = AppColors.grey;
+  static const Color border = AppColors.border;
+  static const Color red = Color(0xFFD94343);
   static const Color green = Color(0xFF39966A);
 
-  static const int finePerDay = 1000;
+  static const int finePerDay = NotificationService.finePerDay;
 
   bool isLoading = true;
   String? errorMessage;
@@ -66,6 +70,14 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
     );
 
     loadReport();
+    NotificationService.runChecks().whenComplete(() {
+      if (mounted) loadReport();
+    });
+  }
+
+  Future<void> refresh() async {
+    await NotificationService.runChecks();
+    await loadReport();
   }
 
   // =====================================================
@@ -200,6 +212,8 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
           'member_name':
               profile?['full_name'] ?? 'Anggota tidak ditemukan',
           'member_nis': profile?['nis'] ?? '-',
+          'member_role': profile?['role'],
+          'member_status': profile?['status'],
           'book_title':
               book?['title'] ?? 'Buku tidak ditemukan',
           'book_author': book?['author'] ?? '-',
@@ -207,67 +221,12 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
         };
       }).toList();
 
-      final activeLoanData = merged.where((loan) {
-        return loan['returned_at'] == null;
-      }).toList();
-
-      final activeProfileData = profiles.where((profile) {
-        return profile['role'] == 'user' &&
-            profile['status'] == 'Aktif';
-      }).toList();
-
-      final bookCounts = <String, int>{};
-      final bookNames = <String, String>{};
-
-      for (final loan in merged) {
-        final id = loan['book_id']?.toString();
-
-        if (id == null) continue;
-
-        bookCounts[id] = (bookCounts[id] ?? 0) + 1;
-        bookNames[id] = loan['book_title'].toString();
-      }
-
-      String mostPopular = '-';
-
-      if (bookCounts.isNotEmpty) {
-        final sortedEntries = bookCounts.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
-
-        mostPopular = bookNames[sortedEntries.first.key] ?? '-';
-      }
-
-      double allFine = 0;
-      double activeFine = 0;
-
-      for (final loan in merged) {
-        final amount = effectiveFine(loan);
-
-        allFine += amount;
-
-        if (!isPaid(loan)) {
-          activeFine += amount;
-        }
-      }
-
       if (!mounted) return;
 
       setState(() {
         loans = merged;
-        totalLoans = merged.length;
-
-        borrowedBooks = activeLoanData
-            .map((item) => item['book_id'].toString())
-            .toSet()
-            .length;
-
-        activeMembers = activeProfileData.length;
-        popularBook = mostPopular;
-        totalFine = allFine;
-        unpaidFine = activeFine;
-
+        // Ringkasan dihitung dari data yang sudah difilter tanggalnya.
         applyDateFilter();
-
         isLoading = false;
       });
     } catch (e) {
@@ -287,31 +246,78 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
   void applyDateFilter() {
     if (selectedRange == null) {
       filteredLoans = List.from(loans);
-      return;
+    } else {
+      final start = DateTime(
+        selectedRange!.start.year,
+        selectedRange!.start.month,
+        selectedRange!.start.day,
+      );
+
+      final end = DateTime(
+        selectedRange!.end.year,
+        selectedRange!.end.month,
+        selectedRange!.end.day,
+        23,
+        59,
+        59,
+      );
+
+      filteredLoans = loans.where((loan) {
+        final date = parseDate(loan['borrowed_at']);
+
+        if (date == null) return false;
+
+        return !date.isBefore(start) && !date.isAfter(end);
+      }).toList();
     }
 
-    final start = DateTime(
-      selectedRange!.start.year,
-      selectedRange!.start.month,
-      selectedRange!.start.day,
-    );
+    recomputeSummary();
+  }
 
-    final end = DateTime(
-      selectedRange!.end.year,
-      selectedRange!.end.month,
-      selectedRange!.end.day,
-      23,
-      59,
-      59,
-    );
+  /// Semua statistik ringkasan mengikuti rentang tanggal aktif.
+  void recomputeSummary() {
+    final data = filteredLoans;
+    totalLoans = data.length;
+    borrowedBooks = data
+        .where((loan) => loan['returned_at'] == null)
+        .map((loan) => loan['book_id'].toString())
+        .toSet()
+        .length;
+    activeMembers = data
+        .where(
+          (loan) =>
+              loan['member_role'] == 'user' &&
+              loan['member_status'] == 'Aktif',
+        )
+        .map((loan) => loan['user_id'].toString())
+        .toSet()
+        .length;
 
-    filteredLoans = loans.where((loan) {
-      final date = parseDate(loan['borrowed_at']);
+    final bookCounts = <String, int>{};
+    final bookNames = <String, String>{};
+    for (final loan in data) {
+      final id = loan['book_id']?.toString();
+      if (id == null) continue;
+      bookCounts[id] = (bookCounts[id] ?? 0) + 1;
+      bookNames[id] = loan['book_title'].toString();
+    }
+    if (bookCounts.isEmpty) {
+      popularBook = '-';
+    } else {
+      final sorted = bookCounts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      popularBook = bookNames[sorted.first.key] ?? '-';
+    }
 
-      if (date == null) return false;
-
-      return !date.isBefore(start) && !date.isAfter(end);
-    }).toList();
+    double allFine = 0;
+    double unpaid = 0;
+    for (final loan in data) {
+      final amount = effectiveFine(loan);
+      allFine += amount;
+      if (!isPaid(loan)) unpaid += amount;
+    }
+    totalFine = allFine;
+    unpaidFine = unpaid;
   }
 
   Future<void> chooseDateRange() async {
@@ -718,13 +724,17 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
       },
     );
 
-    if (result == true && selectedId != null) {
+    final chosenId = selectedId;
+    if (result == true && chosenId != null) {
       try {
+        final amount = double.tryParse(amountController.text.trim()) ?? 0;
+        // borrowing.id bertipe INTEGER; hindari int.parse yang melempar.
+        final int? numericId = int.tryParse(chosenId.trim());
         await supabase.from('borrowings').update({
-          'fine_amount': double.parse(amountController.text),
+          'fine_amount': amount,
           'fine_paid': false,
           'fine_paid_at': null,
-        }).eq('id', int.parse(selectedId!));
+        }).eq('id', numericId ?? chosenId);
 
         if (!mounted) return;
 
@@ -1008,7 +1018,9 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
     } else if (index == 3) {
       navigateToPage(3, const PeminjamanAdminScreen());
     } else if (index == 4) {
-      navigateToPage(4, const PengaturanAdminPage());
+      navigateToPage(4, const DendaAdminScreen());
+    } else if (index == 5) {
+      navigateToPage(5, const ProfileAdminScreen());
     }
   }
 
@@ -1023,7 +1035,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
+        color: color.withValues(alpha: 0.10),
         shape: BoxShape.circle,
       ),
       child: Icon(
@@ -1141,17 +1153,17 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
     bool compact = false,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: border,
           width: 0.8,
         ),
         boxShadow: [
           BoxShadow(
-            color: navy.withOpacity(0.035),
+            color: navy.withValues(alpha: 0.035),
             blurRadius: 9,
             offset: const Offset(0, 3),
           ),
@@ -1161,16 +1173,16 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
               color: cream,
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(9),
             ),
             child: Icon(
               icon,
               color: navy,
-              size: 19,
+              size: 17,
             ),
           ),
           const Spacer(),
@@ -1195,7 +1207,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
                 maxLines: 1,
                 style: TextStyle(
                   color: navy,
-                  fontSize: compact ? 15 : 22,
+                  fontSize: compact ? 13 : 18,
                   fontWeight: FontWeight.w800,
                   letterSpacing: -0.5,
                 ),
@@ -1225,7 +1237,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
         border: Border.all(color: border),
         boxShadow: [
           BoxShadow(
-            color: navy.withOpacity(0.035),
+            color: navy.withValues(alpha: 0.035),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -1237,7 +1249,11 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildCover(loan['book_cover']),
+              BookCover(
+                imageUrl: loan['book_cover']?.toString(),
+                width: 68,
+                height: 94,
+              ),
               const SizedBox(width: 13),
               Expanded(
                 child: Column(
@@ -1270,8 +1286,8 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: paid
-                            ? green.withOpacity(0.10)
-                            : red.withOpacity(0.10),
+                            ? green.withValues(alpha: 0.10)
+                            : red.withValues(alpha: 0.10),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -1322,7 +1338,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: cream.withOpacity(0.7),
+              color: cream.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -1439,7 +1455,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: color,
                 side: BorderSide(
-                  color: color.withOpacity(0.4),
+                  color: color.withValues(alpha: 0.4),
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 5,
@@ -1476,35 +1492,6 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
     );
   }
 
-  Widget _buildCover(dynamic url) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(9),
-      child: Container(
-        width: 68,
-        height: 94,
-        color: cream,
-        child: url != null && url.toString().isNotEmpty
-            ? Image.network(
-                url.toString(),
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    _coverFallback(),
-              )
-            : _coverFallback(),
-      ),
-    );
-  }
-
-  Widget _coverFallback() {
-    return const Center(
-      child: Icon(
-        Icons.menu_book_rounded,
-        color: navy,
-        size: 30,
-      ),
-    );
-  }
-
   // =====================================================
   // HEADER
   // =====================================================
@@ -1512,7 +1499,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
   Widget _buildHeader() {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
       child: Column(
         children: [
           SizedBox(
@@ -1547,7 +1534,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
-                    onPressed: loadReport,
+                    onPressed: refresh,
                     icon: const Icon(
                       Icons.refresh_rounded,
                       color: navy,
@@ -1571,7 +1558,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
               fontSize: 11,
             ),
           ),
-          const SizedBox(height: 17),
+          const SizedBox(height: 10),
           InkWell(
             onTap: chooseDateRange,
             borderRadius: BorderRadius.circular(12),
@@ -1701,10 +1688,10 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
         return ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(
-            16,
+            14,
+            12,
+            14,
             20,
-            16,
-            28,
           ),
           children: [
             const Text(
@@ -1728,9 +1715,9 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
               crossAxisCount: crossAxisCount,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.18,
+              crossAxisSpacing: 9,
+              mainAxisSpacing: 9,
+              childAspectRatio: 1.5,
               children: [
                 statisticCard(
                   title: 'Total Peminjaman',
@@ -1767,7 +1754,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 18),
             Row(
               children: [
                 Expanded(
@@ -1867,7 +1854,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
             ),
             const SizedBox(height: 15),
             ElevatedButton.icon(
-              onPressed: loadReport,
+              onPressed: refresh,
               icon: const Icon(Icons.refresh),
               label: const Text('Coba Lagi'),
               style: ElevatedButton.styleFrom(
@@ -1888,7 +1875,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: AppColors.cream,
       body: SafeArea(
         child: Column(
           children: [
@@ -1904,7 +1891,7 @@ class _LaporanAdminScreenState extends State<LaporanAdminScreen> {
                       ? _buildError()
                       : RefreshIndicator(
                           color: navy,
-                          onRefresh: loadReport,
+                          onRefresh: refresh,
                           child: _buildContent(),
                         ),
             ),

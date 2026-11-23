@@ -1,10 +1,10 @@
 
 import 'package:flutter/material.dart';
 
+import '../../core/constants/app_colors.dart';
+
 class TentangLokaBacaScreen extends StatelessWidget {
   const TentangLokaBacaScreen({super.key});
-
-  static const Color navy = Color(0xFF2E4057);
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +25,7 @@ class TentangLokaBacaScreen extends StatelessWidget {
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(
                       Icons.arrow_back_ios_new_rounded,
-                      color: navy,
+                      color: AppColors.navy,
                       size: 21,
                     ),
                   ),
@@ -34,7 +34,7 @@ class TentangLokaBacaScreen extends StatelessWidget {
                       child: Text(
                         'Tentang LokaBaca',
                         style: TextStyle(
-                          color: navy,
+                          color: AppColors.navy,
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
                         ),
@@ -153,7 +153,7 @@ class TentangLokaBacaScreen extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        color: navy,
+        color: AppColors.navy,
         fontSize: 16,
         fontWeight: FontWeight.w800,
         height: 1.4,
@@ -166,7 +166,7 @@ class TentangLokaBacaScreen extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        color: navy,
+        color: AppColors.navy,
         fontSize: 12.5,
         height: 1.45,
         fontWeight: FontWeight.w400,
@@ -182,7 +182,7 @@ class TentangLokaBacaScreen extends StatelessWidget {
       child: Text(
         text,
         style: const TextStyle(
-          color: navy,
+          color: AppColors.navy,
           fontSize: 12.5,
           height: 1.4,
         ),

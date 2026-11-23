@@ -2,9 +2,10 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/wishlist_service.dart';
+import '../../widgets/book_cover.dart';
 import 'ulasan_buku.dart';
 import 'form_peminjaman.dart';
-import 'wishlist_store.dart';
 
 class DetailBukuScreen extends StatefulWidget {
   final Map<String, dynamic> book;
@@ -19,6 +20,12 @@ class DetailBukuScreen extends StatefulWidget {
 }
 
 class _DetailBukuScreenState extends State<DetailBukuScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WishlistService.load();
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -32,19 +39,54 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
   }
 
   // ==========================================
-  // TOGGLE WISHLIST / KOLEKSI
+  // WISHLIST (HATI) DAN KOLEKSI (PEMINJAMAN)
   // ==========================================
 
-  void _toggleFavorite() {
-    WishlistStore.toggle(widget.book);
-
-    final isFavorite = WishlistStore.isFavorite(widget.book);
+  Future<void> _toggleFavorite() async {
+    await WishlistService.toggle(widget.book);
+    if (!mounted) return;
 
     _showMessage(
-      isFavorite
-          ? 'Buku ditambahkan ke koleksi.'
-          : 'Buku dihapus dari koleksi.',
+      WishlistService.isFavorite(widget.book)
+          ? 'Buku ditambahkan ke wishlist.'
+          : 'Buku dihapus dari wishlist.',
     );
+  }
+
+  /// Koleksi berasal dari peminjaman yang disetujui, bukan wishlist.
+  void _openKoleksi() {
+    final stock =
+        int.tryParse(widget.book['stock']?.toString() ?? '0') ?? 0;
+
+    if (stock <= 0) {
+      _showMessage(
+        'Stok buku habis. Ajukan peminjaman saat buku tersedia '
+        'untuk menambahkannya ke koleksi.',
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FormPeminjamanScreen(book: widget.book),
+      ),
+    );
+  }
+
+  String _resolvePublisher(Map<String, dynamic> book) {
+    final direct = book['publisher']?.toString().trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+
+    final description =
+        (book['description'] ?? book['synopsis'])?.toString() ?? '';
+    final match = RegExp(
+      r'Penerbit\s*:\s*([^\n,.]+)',
+      caseSensitive: false,
+    ).firstMatch(description);
+    final parsed = match?.group(1)?.trim();
+
+    return (parsed != null && parsed.isNotEmpty) ? parsed : '-';
   }
 
   // ==========================================
@@ -55,27 +97,26 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
   Widget build(BuildContext context) {
     final book = widget.book;
 
-    final title = book['title']?.toString() ?? 'Judul Buku';
-    final author = book['author']?.toString() ?? 'Penulis';
-    final cover = book['cover']?.toString() ?? '';
-    final rating = book['rating'] ?? '4.9';
-    final category = book['category'] ?? 'Fiksi';
+    final title = book['title']?.toString() ?? '—';
+    final author = book['author']?.toString() ?? '—';
+    final cover =
+        (book['cover_url'] ?? book['cover'])?.toString() ?? '';
+    final rating = book['rating']?.toString() ?? '—';
+    final category = book['category']?.toString() ?? '—';
 
-    final synopsis = book['synopsis']?.toString() ??
+    final synopsis = (book['description'] ?? book['synopsis'])?.toString() ??
         'Informasi sinopsis buku ini belum tersedia.';
 
-    final publisher = book['publisher']?.toString() ??
-        'Kepustakaan Populer Gramedia';
+    final publisher = _resolvePublisher(book);
 
-    final year = book['year'] ?? '2017';
-    final pages = book['pages'] ?? '379 halaman';
-    final reviews = book['reviews'] ?? '12.4k ulasan';
+    final year = (book['published_year'] ?? book['year'])?.toString() ?? '—';
+    final pages = book['pages'] == null ? '—' : '${book['pages']} halaman';
+    final reviews = book['reviews']?.toString() ?? '—';
 
-    final tags = book['tags'] ?? [
-      category,
-      'Sastra',
-      'Rekomendasi',
-    ];
+    final rawTags = book['tags'];
+    final tags = rawTags is List
+        ? rawTags
+        : <String>[if (category != '—') category];
 
     return Scaffold(
       backgroundColor: AppColors.white,
@@ -123,15 +164,15 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                               ),
 
                               // TOMBOL FAVORITE
-                              ValueListenableBuilder<
-                                  List<Map<String, dynamic>>>(
-                                valueListenable: WishlistStore.books,
-                                builder: (context, books, child) {
+                              ValueListenableBuilder<List<String>>(
+                                valueListenable: WishlistService.ids,
+                                builder: (context, ids, child) {
                                   final isFavorite =
-                                      WishlistStore.isFavorite(book);
+                                      WishlistService.isFavorite(book);
 
                                   return IconButton(
                                     onPressed: _toggleFavorite,
+                                    tooltip: 'Wishlist',
                                     icon: Icon(
                                       isFavorite
                                           ? Icons.favorite_rounded
@@ -167,7 +208,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.navy.withOpacity(0.08),
+                            color: AppColors.navy.withValues(alpha: 0.08),
                             blurRadius: 24,
                             spreadRadius: 1,
                             offset: const Offset(0, 10),
@@ -180,40 +221,28 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(9),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             width: 2,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.24),
+                              color: Colors.black.withValues(alpha: 0.24),
                               blurRadius: 16,
                               spreadRadius: 1,
                               offset: const Offset(5, 9),
                             ),
                             BoxShadow(
-                              color: AppColors.navy.withOpacity(0.10),
+                              color: AppColors.navy.withValues(alpha: 0.10),
                               blurRadius: 5,
                               offset: const Offset(-2, 2),
                             ),
                           ],
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(7),
-                          child: Image.asset(
-                            cover,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) {
-                              return Container(
-                                color: book['color'] ??
-                                    const Color(0xFF356B82),
-                                child: const Icon(
-                                  Icons.menu_book_rounded,
-                                  color: Colors.white,
-                                  size: 55,
-                                ),
-                              );
-                            },
-                          ),
+                        child: BookCover(
+                          imageUrl: cover,
+                          width: 148,
+                          height: 218,
+                          radius: 7,
                         ),
                       ),
                     ),
@@ -273,7 +302,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.navy.withOpacity(0.07),
+                            color: AppColors.navy.withValues(alpha: 0.07),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),
@@ -284,12 +313,12 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                         children: [
                           const Icon(
                             Icons.star_rounded,
-                            color: Color(0xFFFFC83D),
+                            color: AppColors.yellow,
                             size: 23,
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            '$rating',
+                            rating,
                             style: const TextStyle(
                               color: AppColors.navy,
                               fontWeight: FontWeight.w800,
@@ -323,7 +352,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                         spacing: 10,
                         runSpacing: 9,
                         children: List.generate(
-                          (tags as List).length,
+                          tags.length,
                           (index) => Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -369,7 +398,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.navy.withOpacity(0.05),
+                            color: AppColors.navy.withValues(alpha: 0.05),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -439,9 +468,9 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                           const SizedBox(height: 16),
                           _buildInfoRow('Penerbit', publisher),
                           const SizedBox(height: 16),
-                          _buildInfoRow('Tahun Terbit', '$year'),
+                          _buildInfoRow('Tahun Terbit', year),
                           const SizedBox(height: 16),
-                          _buildInfoRow('Jumlah Halaman', '$pages'),
+                          _buildInfoRow('Jumlah Halaman', pages),
                         ],
                       ),
                     ),
@@ -467,7 +496,7 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
                 color: AppColors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha: 0.06),
                     blurRadius: 12,
                     offset: const Offset(0, -4),
                   ),
@@ -511,22 +540,12 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
 
                   const SizedBox(width: 12),
 
-                  // TOMBOL KOLEKSI
-                  ValueListenableBuilder<
-                      List<Map<String, dynamic>>>(
-                    valueListenable: WishlistStore.books,
-                    builder: (context, books, child) {
-                      final isFavorite =
-                          WishlistStore.isFavorite(widget.book);
-
-                      return _buildBottomIcon(
-                        isFavorite
-                            ? Icons.bookmark_added_rounded
-                            : Icons.bookmark_add_outlined,
-                        _toggleFavorite,
-                        isActive: isFavorite,
-                      );
-                    },
+                  // TOMBOL KOLEKSI: mengarah ke pengajuan peminjaman,
+                  // bukan toggle wishlist.
+                  _buildBottomIcon(
+                    Icons.bookmark_add_outlined,
+                    _openKoleksi,
+                    tooltip: 'Koleksi',
                   ),
 
                   const SizedBox(width: 10),
@@ -598,21 +617,25 @@ class _DetailBukuScreenState extends State<DetailBukuScreen> {
     IconData icon,
     VoidCallback onTap, {
     bool isActive = false,
+    String? tooltip,
   }) {
     return SizedBox(
       width: 48,
       height: 46,
       child: Material(
-        color: const Color(0xFFFAF5EB),
+        color: AppColors.input,
         elevation: 1,
         borderRadius: BorderRadius.circular(11),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(11),
-          child: Icon(
-            icon,
-            color: isActive ? const Color(0xFF4D9469) : AppColors.navy,
-            size: 22,
+        child: Tooltip(
+          message: tooltip ?? '',
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(11),
+            child: Icon(
+              icon,
+              color: isActive ? const Color(0xFF4D9469) : AppColors.navy,
+              size: 22,
+            ),
           ),
         ),
       ),

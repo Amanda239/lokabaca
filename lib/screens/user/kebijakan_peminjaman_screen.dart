@@ -1,6 +1,8 @@
 
 import 'package:flutter/material.dart';
 
+import '../../core/constants/app_colors.dart';
+
 class KebijakanPeminjamanScreen extends StatefulWidget {
   const KebijakanPeminjamanScreen({super.key});
 
@@ -11,8 +13,6 @@ class KebijakanPeminjamanScreen extends StatefulWidget {
 
 class _KebijakanPeminjamanScreenState
     extends State<KebijakanPeminjamanScreen> {
-  static const Color navy = Color(0xFF203F70);
-  static const Color cream = Color(0xFFF8F4EA);
   static const Color borderColor = Color(0xFFDCE5F0);
 
   bool isAgreed = false;
@@ -36,7 +36,7 @@ class _KebijakanPeminjamanScreenState
                     onPressed: () => Navigator.pop(context),
                     icon: const Icon(
                       Icons.arrow_back_ios_new_rounded,
-                      color: navy,
+                      color: AppColors.navy,
                       size: 21,
                     ),
                   ),
@@ -47,7 +47,7 @@ class _KebijakanPeminjamanScreenState
                         style: TextStyle(
                           fontSize: 19,
                           fontWeight: FontWeight.w800,
-                          color: navy,
+                          color: AppColors.navy,
                         ),
                       ),
                     ),
@@ -81,14 +81,14 @@ class _KebijakanPeminjamanScreenState
                               height: 65,
                               decoration: BoxDecoration(
                                 color: const Color(0xFFFFF4CE)
-                                    .withOpacity(0.55),
+                                    .withValues(alpha: 0.55),
                                 shape: BoxShape.circle,
                               ),
                             ),
                           ),
                           const Icon(
                             Icons.menu_book_rounded,
-                            color: navy,
+                            color: AppColors.navy,
                             size: 112,
                           ),
                           Positioned(
@@ -98,7 +98,7 @@ class _KebijakanPeminjamanScreenState
                               width: 43,
                               height: 49,
                               decoration: BoxDecoration(
-                                color: navy,
+                                color: AppColors.navy,
                                 borderRadius:
                                     BorderRadius.circular(5),
                                 boxShadow: const [
@@ -127,7 +127,7 @@ class _KebijakanPeminjamanScreenState
                       'peminjaman buku berikut.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: navy,
+                        color: AppColors.navy,
                         fontSize: 13,
                         height: 1.5,
                       ),
@@ -146,7 +146,7 @@ class _KebijakanPeminjamanScreenState
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 5,
                             offset: const Offset(0, 2),
                           ),
@@ -239,9 +239,9 @@ class _KebijakanPeminjamanScreenState
                                   isAgreed = value ?? false;
                                 });
                               },
-                              activeColor: navy,
+                              activeColor: AppColors.navy,
                               side: const BorderSide(
-                                color: navy,
+                                color: AppColors.navy,
                                 width: 1.5,
                               ),
                               visualDensity:
@@ -275,7 +275,7 @@ class _KebijakanPeminjamanScreenState
                               }
                             : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: navy,
+                          backgroundColor: AppColors.navy,
                           disabledBackgroundColor:
                               const Color(0xFFB7C2D0),
                           foregroundColor: Colors.white,
@@ -339,7 +339,7 @@ class _KebijakanPeminjamanScreenState
             margin: const EdgeInsets.only(top: 2),
             decoration: BoxDecoration(
               color: specialIcon != null
-                  ? navy
+                  ? AppColors.navy
                   : const Color(0xFFEEF4FC),
               shape: BoxShape.circle,
             ),
@@ -355,7 +355,7 @@ class _KebijakanPeminjamanScreenState
                   )
                 : Icon(
                     icon,
-                    color: navy,
+                    color: AppColors.navy,
                     size: 20,
                   ),
           ),
@@ -369,7 +369,7 @@ class _KebijakanPeminjamanScreenState
                 Text(
                   title,
                   style: const TextStyle(
-                    color: navy,
+                    color: AppColors.navy,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
                   ),
@@ -400,7 +400,7 @@ class _KebijakanPeminjamanScreenState
                           const Text(
                             '•  ',
                             style: TextStyle(
-                              color: navy,
+                              color: AppColors.navy,
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
                             ),

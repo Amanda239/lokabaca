@@ -369,7 +369,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             backgroundColor: AppColors.navy,
                             foregroundColor: AppColors.white,
                             disabledBackgroundColor:
-                                AppColors.navy.withOpacity(0.6),
+                                AppColors.navy.withValues(alpha: 0.6),
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),

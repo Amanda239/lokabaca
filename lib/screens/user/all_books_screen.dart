@@ -1,37 +1,36 @@
-
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/book_repository.dart';
+import '../../widgets/book_cover.dart';
+import '../../widgets/catalog_controls.dart';
 import 'detail_buku_screen.dart';
 
 class AllBooksScreen extends StatefulWidget {
-  const AllBooksScreen({super.key});
+  /// Filter awal opsional agar halaman pencarian bisa meneruskan query/kategori.
+  final String? search;
+  final String? category;
+
+  const AllBooksScreen({
+    super.key,
+    this.search,
+    this.category,
+  });
 
   @override
   State<AllBooksScreen> createState() => _AllBooksScreenState();
 }
 
 class _AllBooksScreenState extends State<AllBooksScreen> {
-  final SupabaseClient supabase = Supabase.instance.client;
-
-  static const int booksPerPage = 1;
-
-  final List<String> categories = [
-    'Semua',
-    'Fiksi',
-    'Non Fiksi',
-    'Romance',
-    'Komik',
-    'Teknologi',
-    'Pendidikan',
-    'Agama',
-  ];
-
+  List<String> categories = [];
   List<Map<String, dynamic>> books = [];
 
-  String selectedCategory = 'Semua';
+  String? selectedCategory;
+  String selectedSort = BookRepository.sortOptions.first;
+
   int currentPage = 0;
+  int totalItems = 0;
+  int _loadToken = 0;
 
   bool isLoading = true;
   String? errorMessage;
@@ -39,32 +38,55 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
   @override
   void initState() {
     super.initState();
+    selectedCategory = widget.category;
+    _loadCategories();
     loadBooks();
   }
 
-  // AMBIL DATA BUKU DARI SUPABASE
+  Future<void> _loadCategories() async {
+    final result = await BookRepository.categories();
+    final category = widget.category;
+    if (category != null &&
+        category.isNotEmpty &&
+        !result.contains(category)) {
+      result.add(category);
+    }
+    if (mounted) setState(() => categories = result);
+  }
+
+  // AMBIL DATA BUKU DARI REPOSITORY (MAKS. 10 PER HALAMAN)
   Future<void> loadBooks() async {
+    final token = ++_loadToken;
+
+    if (!mounted) return;
     setState(() {
       isLoading = true;
       errorMessage = null;
     });
 
     try {
-      final response = await supabase
-          .from('books')
-          .select()
-          .order('title', ascending: true);
+      final results = await Future.wait([
+        BookRepository.fetchPage(
+          page: currentPage,
+          search: widget.search,
+          category: selectedCategory,
+          sort: selectedSort,
+        ),
+        BookRepository.count(
+          search: widget.search,
+          category: selectedCategory,
+        ),
+      ]);
 
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
 
       setState(() {
-        books = List<Map<String, dynamic>>.from(response);
-        currentPage = 0;
+        books = results[0] as List<Map<String, dynamic>>;
+        totalItems = results[1] as int;
         isLoading = false;
       });
-    } catch (e) {
-      if (!mounted) return;
-
+    } catch (_) {
+      if (!mounted || token != _loadToken) return;
       setState(() {
         isLoading = false;
         errorMessage = 'Gagal memuat daftar buku.';
@@ -72,10 +94,32 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
     }
   }
 
+  void _changeCategory(String? category) {
+    if (category == selectedCategory) return;
+    setState(() {
+      selectedCategory = category;
+      currentPage = 0;
+    });
+    loadBooks();
+  }
+
+  void _changeSort(String sort) {
+    if (sort == selectedSort) return;
+    setState(() {
+      selectedSort = sort;
+      currentPage = 0;
+    });
+    loadBooks();
+  }
+
+  void _goToPage(int page) {
+    if (page < 0 || page * BookRepository.pageSize >= totalItems) return;
+    setState(() => currentPage = page);
+    loadBooks();
+  }
+
   // MENYESUAIKAN DATA UNTUK HALAMAN DETAIL
-  Map<String, dynamic> prepareBookForDetail(
-    Map<String, dynamic> book,
-  ) {
+  Map<String, dynamic> prepareBookForDetail(Map<String, dynamic> book) {
     return {
       ...book,
       'cover': book['cover_url'] ?? book['cover'] ?? '',
@@ -87,7 +131,6 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
     };
   }
 
-  // MEMBUKA HALAMAN DETAIL BUKU
   void openBook(Map<String, dynamic> book) {
     Navigator.push(
       context,
@@ -99,251 +142,135 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
     );
   }
 
-  // FILTER KATEGORI
-  List<Map<String, dynamic>> get filteredBooks {
-    if (selectedCategory == 'Semua') {
-      return books;
-    }
-
-    return books.where((book) {
-      return book['category']?.toString().toLowerCase() ==
-          selectedCategory.toLowerCase();
-    }).toList();
-  }
-
-  // TOTAL HALAMAN
-  int get totalPages {
-    if (filteredBooks.isEmpty) return 0;
-
-    return (filteredBooks.length / booksPerPage).ceil();
-  }
-
-  // BUKU PADA HALAMAN AKTIF
-  List<Map<String, dynamic>> get currentBooks {
-    final start = currentPage * booksPerPage;
-
-    if (start >= filteredBooks.length) return [];
-
-    final end = (start + booksPerPage).clamp(
-      0,
-      filteredBooks.length,
-    );
-
-    return filteredBooks.sublist(start, end);
-  }
-
-  // GANTI KATEGORI
-  void changeCategory(String category) {
-    setState(() {
-      selectedCategory = category;
-      currentPage = 0;
-    });
-  }
-
-  // PINDAH HALAMAN
-  void goToPage(int index) {
-    if (index < 0 || index >= totalPages) return;
-
-    setState(() {
-      currentPage = index;
-    });
-  }
-
-  // FORMAT RATING
   String formatRating(dynamic rating) {
-    if (rating == null) return '-';
-
-    final value = double.tryParse(rating.toString());
-
-    if (value == null) return '-';
-
-    return value.toStringAsFixed(1);
+    final value = double.tryParse(rating?.toString() ?? '');
+    return value == null ? '-' : value.toStringAsFixed(1);
   }
 
-  // CEK KETERSEDIAAN STOK
   bool isAvailable(Map<String, dynamic> book) {
-    final stock = int.tryParse(
-          book['stock']?.toString() ?? '0',
-        ) ??
-        0;
-
-    return stock > 0;
+    return (int.tryParse(book['stock']?.toString() ?? '0') ?? 0) > 0;
   }
 
-  // COVER BUKU
-  Widget buildBookCover(Map<String, dynamic> book) {
-    final coverUrl = book['cover_url']?.toString() ?? '';
-
-    if (coverUrl.isEmpty) {
-      return Container(
-        color: const Color(0xFFF5F5F5),
-        alignment: Alignment.center,
-        child: const Icon(
-          Icons.menu_book_rounded,
-          color: AppColors.navy,
-          size: 35,
-        ),
-      );
-    }
-
-    return Image.network(
-      coverUrl,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      errorBuilder: (_, __, ___) {
-        return Container(
-          color: const Color(0xFFF5F5F5),
-          alignment: Alignment.center,
-          child: const Icon(
-            Icons.menu_book_rounded,
-            color: AppColors.navy,
-            size: 35,
-          ),
-        );
-      },
-    );
-  }
-
-  // CARD BUKU
+  // CARD BUKU — GRID BERSIH, COVER BESAR, INFO RINGKAS
   Widget buildBookCard(Map<String, dynamic> book) {
     final available = isAvailable(book);
-    final description =
-        book['description']?.toString().trim() ?? '';
+    final title = book['title']?.toString().trim() ?? '';
+    final author = book['author']?.toString().trim() ?? '';
 
     return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
+      color: AppColors.white,
+      elevation: 3,
+      shadowColor: AppColors.navy.withValues(alpha: 0.13),
+      borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: () => openBook(book),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(13),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: const Color(0xFFEAEAEA),
-              width: 0.8,
-            ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(7),
-                child: SizedBox(
-                  width: 105,
-                  height: 150,
-                  child: buildBookCover(book),
-                ),
-              ),
+        borderRadius: BorderRadius.circular(13),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final coverWidth = constraints.maxWidth;
+              final coverHeight = coverWidth * 1.24;
 
-              const SizedBox(width: 15),
-
-              Expanded(
-                child: SizedBox(
-                  height: 150,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
                     children: [
-                      Text(
-                        book['title']?.toString() ?? 'Tanpa Judul',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          height: 1.3,
-                        ),
+                      BookCover(
+                        imageUrl: book['cover_url'] ?? book['cover'],
+                        width: coverWidth,
+                        height: coverHeight,
+                        radius: 9,
                       ),
-
-                      const SizedBox(height: 5),
-
-                      Text(
-                        book['author']?.toString() ??
-                            'Penulis tidak diketahui',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.grey,
-                          fontSize: 11,
-                        ),
-                      ),
-
-                      const SizedBox(height: 10),
-
-                      Expanded(
-                        child: Text(
-                          description.isNotEmpty
-                              ? description
-                              : 'Belum ada deskripsi buku.',
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.text,
-                            fontSize: 10,
-                            height: 1.5,
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.white.withValues(alpha: 0.94),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.star_rounded,
+                                color: AppColors.yellow,
+                                size: 12,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                formatRating(book['rating']),
+                                style: const TextStyle(
+                                  color: AppColors.navy,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-
-                      const SizedBox(height: 7),
-
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.star_rounded,
-                            color: Color(0xFFE5AA35),
-                            size: 16,
-                          ),
-
-                          const SizedBox(width: 3),
-
-                          Text(
-                            formatRating(book['rating']),
-                            style: const TextStyle(
-                              color: AppColors.navy,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-
-                          const Spacer(),
-
-                          Text(
-                            available ? 'Tersedia' : 'Habis',
-                            style: TextStyle(
-                              color: available
-                                  ? const Color(0xFF4D9469)
-                                  : const Color(0xFFD49B38),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
-                ),
-              ),
-
-              const SizedBox(width: 3),
-
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: Color(0xFFAAAAAA),
-                size: 19,
-              ),
-            ],
+                  const SizedBox(height: 8),
+                  Text(
+                    title.isNotEmpty ? title : 'Tanpa Judul',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    author.isNotEmpty ? author : 'Penulis tidak diketahui',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.grey,
+                      fontSize: 10,
+                    ),
+                  ),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: available ? AppColors.navy : AppColors.grey,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        available ? 'Tersedia' : 'Habis',
+                        style: TextStyle(
+                          color: available ? AppColors.navy : AppColors.grey,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  // LOADING
   Widget buildLoading() {
     return const Center(
       child: CircularProgressIndicator(
@@ -353,7 +280,6 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
     );
   }
 
-  // ERROR
   Widget buildError() {
     return Center(
       child: Padding(
@@ -366,9 +292,7 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
               size: 42,
               color: AppColors.grey,
             ),
-
             const SizedBox(height: 12),
-
             Text(
               errorMessage ?? 'Terjadi kesalahan.',
               textAlign: TextAlign.center,
@@ -377,9 +301,7 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
                 fontSize: 13,
               ),
             ),
-
             const SizedBox(height: 12),
-
             OutlinedButton.icon(
               onPressed: loadBooks,
               icon: const Icon(Icons.refresh_rounded),
@@ -391,20 +313,13 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
     );
   }
 
-  // EMPTY STATE
   Widget buildEmpty() {
     return const Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.menu_book_rounded,
-            size: 45,
-            color: AppColors.grey,
-          ),
-
+          Icon(Icons.menu_book_rounded, size: 45, color: AppColors.grey),
           SizedBox(height: 10),
-
           Text(
             'Buku tidak ditemukan',
             style: TextStyle(
@@ -413,89 +328,26 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
               fontSize: 13,
             ),
           ),
-
           SizedBox(height: 5),
-
           Text(
-            'Belum ada buku dalam kategori ini.',
-            style: TextStyle(
-              color: AppColors.grey,
-              fontSize: 10,
-            ),
+            'Coba ubah kata kunci atau kategori pencarian.',
+            style: TextStyle(color: AppColors.grey, fontSize: 10),
           ),
         ],
       ),
     );
   }
 
-  // PAGINATION
-  Widget buildPagination() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        IconButton(
-          onPressed: currentPage > 0
-              ? () => goToPage(currentPage - 1)
-              : null,
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(
-            Icons.chevron_left_rounded,
-            size: 21,
-          ),
-          color: AppColors.navy,
-          disabledColor: const Color(0xFFDDDDDD),
-        ),
-
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 13,
-            vertical: 6,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(7),
-            border: Border.all(
-              color: const Color(0xFFEAEAEA),
-              width: 0.8,
-            ),
-          ),
-          child: Text(
-            '${currentPage + 1} / $totalPages',
-            style: const TextStyle(
-              color: AppColors.navy,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-
-        IconButton(
-          onPressed: currentPage < totalPages - 1
-              ? () => goToPage(currentPage + 1)
-              : null,
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(
-            Icons.chevron_right_rounded,
-            size: 21,
-          ),
-          color: AppColors.navy,
-          disabledColor: const Color(0xFFDDDDDD),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(18, 15, 18, 18),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // HEADER
               Row(
                 children: [
                   IconButton(
@@ -506,19 +358,20 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
                       size: 19,
                     ),
                   ),
-
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Semua Buku',
+                      widget.search != null && widget.search!.isNotEmpty
+                          ? 'Hasil Pencarian'
+                          : 'Semua Buku',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         color: AppColors.navy,
                         fontSize: 19,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-
                   IconButton(
                     onPressed: loadBooks,
                     icon: const Icon(
@@ -529,103 +382,49 @@ class _AllBooksScreenState extends State<AllBooksScreen> {
                   ),
                 ],
               ),
-
-              const SizedBox(height: 15),
-
+              const SizedBox(height: 12),
               Text(
-                '${filteredBooks.length} buku ditemukan',
-                style: const TextStyle(
-                  color: AppColors.grey,
-                  fontSize: 12,
-                ),
+                '$totalItems buku ditemukan',
+                style: const TextStyle(color: AppColors.grey, fontSize: 12),
               ),
-
-              const SizedBox(height: 14),
-
-              // FILTER KATEGORI
-              SizedBox(
-                height: 38,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: categories.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    final category = categories[index];
-                    final selected =
-                        selectedCategory == category;
-
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(9),
-                      onTap: () => changeCategory(category),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                        ),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? AppColors.navy
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(9),
-                          border: Border.all(
-                            color: selected
-                                ? AppColors.navy
-                                : const Color(0xFFEAEAEA),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: Text(
-                          category,
-                          style: TextStyle(
-                            color: selected
-                                ? Colors.white
-                                : AppColors.navy,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              const SizedBox(height: 12),
+              CatalogFilterBar(
+                categories: categories,
+                selectedCategory: selectedCategory,
+                selectedSort: selectedSort,
+                onCategoryChanged: _changeCategory,
+                onSortChanged: _changeSort,
               ),
-
-              const SizedBox(height: 18),
-
-              // DAFTAR BUKU
+              const SizedBox(height: 16),
               Expanded(
                 child: isLoading
                     ? buildLoading()
                     : errorMessage != null
                         ? buildError()
-                        : filteredBooks.isEmpty
+                        : books.isEmpty
                             ? buildEmpty()
-                            : ListView.separated(
-                                key: ValueKey(selectedCategory),
-                                physics:
-                                    const BouncingScrollPhysics(),
-                                padding: const EdgeInsets.only(
-                                  bottom: 12,
+                            : GridView.builder(
+                                physics: const BouncingScrollPhysics(),
+                                padding: const EdgeInsets.only(bottom: 12),
+                                itemCount: books.length,
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 13,
+                                  mainAxisSpacing: 13,
+                                  childAspectRatio: 0.55,
                                 ),
-                                itemCount: currentBooks.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 12),
-                                itemBuilder: (context, index) {
-                                  return buildBookCard(
-                                    currentBooks[index],
-                                  );
-                                },
+                                itemBuilder: (context, index) =>
+                                    buildBookCard(books[index]),
                               ),
               ),
-
-              if (!isLoading &&
-                  errorMessage == null &&
-                  totalPages > 1) ...[
-                const SizedBox(height: 10),
-                buildPagination(),
-              ],
+              if (!isLoading && errorMessage == null && totalItems > 0)
+                CatalogPagination(
+                  page: currentPage,
+                  totalItems: totalItems,
+                  onPrevious: () => _goToPage(currentPage - 1),
+                  onNext: () => _goToPage(currentPage + 1),
+                ),
             ],
           ),
         ),
