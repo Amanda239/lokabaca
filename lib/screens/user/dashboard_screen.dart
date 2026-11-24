@@ -17,6 +17,7 @@ import 'profile_screen.dart';
 import 'searchpage_screen.dart';
 import 'user_bottom_navigation.dart';
 import 'wishlist_screen.dart';
+import 'ai_chat_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -119,9 +120,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       ...book,
       'cover': book['cover_url'] ?? book['cover'] ?? '',
       'synopsis': book['description'] ?? book['synopsis'] ?? '',
-      'year': book['published_year']?.toString() ??
-          book['year']?.toString() ??
-          '-',
+      'year':
+          book['published_year']?.toString() ?? book['year']?.toString() ?? '-',
       'pages': book['pages']?.toString() ?? '-',
     };
   }
@@ -177,6 +177,24 @@ class _DashboardScreenState extends State<DashboardScreen>
           },
         ),
       ),
+
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: AppColors.yellow,
+        elevation: 4,
+        tooltip: 'AI Assistant',
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AiChatScreen()),
+          );
+        },
+        child: const Icon(
+          Icons.auto_awesome_rounded,
+          color: AppColors.navy,
+          size: 25,
+        ),
+      ),
+
       bottomNavigationBar: UserBottomNavigation(
         selectedIndex: selectedNav,
         onTap: _navigateTo,
@@ -198,11 +216,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             errorBuilder: (_, __, ___) => const Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.menu_book_rounded,
-                  color: AppColors.navy,
-                  size: 28,
-                ),
+                Icon(Icons.menu_book_rounded, color: AppColors.navy, size: 28),
                 Text(
                   'LokaBaca',
                   style: TextStyle(
@@ -273,20 +287,14 @@ class _DashboardScreenState extends State<DashboardScreen>
             onTap: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const ProfileScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
               );
               await _loadProfileAvatar();
             },
             borderRadius: BorderRadius.circular(20),
             child: Padding(
               padding: const EdgeInsets.all(4),
-              child: UserAvatar(
-                imageUrl: avatarUrl,
-                size: 31,
-                iconSize: 20,
-              ),
+              child: UserAvatar(imageUrl: avatarUrl, size: 31, iconSize: 20),
             ),
           ),
         ),
@@ -314,11 +322,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
           child: Row(
             children: [
-              const Icon(
-                Icons.search_rounded,
-                color: AppColors.navy,
-                size: 21,
-              ),
+              const Icon(Icons.search_rounded, color: AppColors.navy, size: 21),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -350,10 +354,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         height: bannerHeight,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              AppColors.navy,
-              AppColors.navy.withValues(alpha: 0.78),
-            ],
+            colors: [AppColors.navy, AppColors.navy.withValues(alpha: 0.78)],
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
@@ -373,10 +374,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 15,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
               child: Row(
                 children: [
                   Expanded(
@@ -464,25 +462,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                 case 'Wishlist':
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const WishlistScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const WishlistScreen()),
                   );
                   break;
                 case 'Koleksi':
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const CollectionScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const CollectionScreen()),
                   );
                   break;
                 case 'Profil':
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const ProfileScreen(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
                   );
                   break;
               }
@@ -625,9 +617,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => DetailBukuScreen(
-                        book: _prepareBookForDetail(book),
-                      ),
+                      builder: (_) =>
+                          DetailBukuScreen(book: _prepareBookForDetail(book)),
                     ),
                   );
                 },
