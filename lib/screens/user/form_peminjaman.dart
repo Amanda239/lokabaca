@@ -135,6 +135,35 @@ class _FormPeminjamanScreenState
     });
 
     try {
+      // Cegah pengajuan ganda: buku yang sama masih menunggu approval admin
+      // atau sedang dipinjam. (Server juga menjaga ini lewat trigger.)
+      final existing = await supabase
+          .from('borrowings')
+          .select('id,status')
+          .eq('user_id', user.id)
+          .eq('book_id', bookId)
+          .inFilter('status', [
+        'Menunggu',
+        'Dipinjam',
+        'Terlambat',
+        'Menunggu Pengembalian',
+      ]).limit(1);
+
+      if (existing.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          isLoading = false;
+        });
+        final waiting =
+            existing.first['status']?.toString().toLowerCase() == 'menunggu';
+        _showMessage(
+          waiting
+              ? 'Pengajuan untuk buku ini masih menunggu persetujuan admin.'
+              : 'Kamu masih meminjam buku ini.',
+        );
+        return;
+      }
+
       final now = DateTime.now();
 
       final selectedDueDate = now.add(

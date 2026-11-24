@@ -22,6 +22,19 @@ lalu klik **Run**. Migrasi ini:
 
 > Migrasi aman dijalankan berulang (idempoten).
 
+### 1b. Migrasi approval peminjaman (WAJIB, jalankan setelah yang di atas)
+
+Salin seluruh isi `supabase/migrations/20261124000000_borrowing_approval.sql`
+ke SQL Editor lalu **Run**. Migrasi ini:
+
+- membuat fungsi `process_borrowing` (setujui / tolak / konfirmasi pengembalian,
+  khusus admin, stok otomatis -1 saat disetujui dan +1 saat dikembalikan),
+- mengunci agar user **tidak bisa** mengubah status pinjamannya sendiri
+  menjadi `Dipinjam` (setiap pengajuan baru dipaksa `Menunggu`),
+- mencegah pengajuan ganda untuk buku yang sama,
+- memastikan denda & pengingat hanya untuk buku berstatus dipinjam
+  (bukan `Menunggu` / `Ditolak`).
+
 ## 2. Storage buckets
 
 Pastikan bucket berikut ada (atau buat di **Storage → New bucket**):

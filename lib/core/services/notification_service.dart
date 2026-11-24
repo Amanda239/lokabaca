@@ -20,6 +20,19 @@ class NotificationService {
   /// Tarif denda sesuai kebijakan LokaBaca: Rp1.000 per hari.
   static const int finePerDay = 1000;
 
+  /// Hanya buku yang benar-benar sedang dipinjam yang kena denda/pengingat.
+  /// Pengajuan 'Menunggu' atau 'Ditolak' tidak boleh ikut.
+  static bool _isOnLoan(dynamic status) {
+    const active = {
+      'dipinjam',
+      'borrowed',
+      'aktif',
+      'terlambat',
+      'menunggu pengembalian',
+    };
+    return active.contains(status?.toString().trim().toLowerCase() ?? '');
+  }
+
   static Future<void> start() async {
     if (_started) return;
     _started = true;
@@ -56,6 +69,7 @@ class NotificationService {
           .lt('due_date', now.toIso8601String());
 
       for (final row in rows) {
+        if (!_isOnLoan(row['status'])) continue;
         final due = _dateOf(row['due_date']);
         if (due == null) continue;
         final currentFine = _number(row['fine_amount']);
@@ -68,7 +82,9 @@ class NotificationService {
         try {
           final update = <String, dynamic>{'fine_amount': amount.toDouble()};
           final status = row['status']?.toString().toLowerCase() ?? '';
-          if (status == 'dipinjam' || status == 'borrowed') {
+          if (status == 'dipinjam' ||
+              status == 'borrowed' ||
+              status == 'aktif') {
             update['status'] = 'Terlambat';
           }
           await _db.from('borrowings').update(update).eq('id', id);
@@ -105,6 +121,7 @@ class NotificationService {
           .lte('due_date', limit.toIso8601String());
 
       for (final row in rows) {
+        if (!_isOnLoan(row['status'])) continue;
         final due = _dateOf(row['due_date']);
         if (due == null) continue;
         final id = row['id'];

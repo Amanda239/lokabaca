@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/app_colors.dart';
-import '../../core/services/notification_service.dart';
 import '../../widgets/book_cover.dart';
 import 'admin_bottom_navigation.dart';
 import 'dashboard_admin.dart';
@@ -233,19 +232,9 @@ class _DetailPeminjamanScreenState
         },
       );
 
-      // Status hasil aksi RPC harus sampai ke notifikasi peminjam.
-      final resultStatus = switch (action) {
-        'approve' => 'Dipinjam',
-        'reject' => 'Ditolak',
-        'confirm_return' => 'Selesai',
-        _ => '',
-      };
-      if (resultStatus.isNotEmpty) {
-        await NotificationService.notifyBorrowingStatus(
-          widget.borrowingId.toString(),
-          resultStatus,
-        );
-      }
+      // Notifikasi ke peminjam dikirim otomatis oleh trigger database
+      // (trg_borrowings_after_change -> notify_borrowing_status), jadi tidak
+      // perlu dikirim lagi dari sini agar tidak dobel.
 
       if (!mounted) return;
 
